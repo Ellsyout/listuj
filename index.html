@@ -482,7 +482,13 @@
             <option value="">Nejrelevantnější</option>
           </select></label>
       </div>
-      <label class="check"><input type="checkbox" id="ebookOnly"> 📱 Jen knihy, které jsou i jako e-kniha</label>
+      <label class="check">Formát:
+        <select id="format" style="width:auto; padding:8px 10px">
+          <option value="">📚 Všechny knihy</option>
+          <option value="ebook">📱 Jen e-knihy</option>
+          <option value="audio">🎧 Jen audioknihy</option>
+        </select>
+      </label>
       <div class="mood-parse" id="moodParse" hidden></div>
       <div class="actions">
         <button class="btn" id="search">🔍 Najít</button>
@@ -625,7 +631,7 @@ const cache = new Map();
 
 // ---- Knihovny.cz (souhrnný katalog českých knihoven) – nejnovější české knihy s českými anotacemi ----
 const KC_API = "https://www.knihovny.cz/api/v1";
-const KC_PAGE = 20;
+const KC_PAGE = 40;
 const KC_FIELDS = ["id", "title", "authors", "publicationDates", "formats", "cleanIsbn", "summary", "subjects", "publishers", "physicalDescriptions"];
 const KC_LANG = { cze: "Czech", slo: "Slovak", eng: "English", ger: "German", pol: "Polish", fre: "French", spa: "Spanish", ita: "Italian", rus: "Russian" };
 const KC_GENRES = {
@@ -695,8 +701,8 @@ function toggleList(id, book) {
   renderTabs();
 }
 function slim(b) { // ukládáme jen to, co je potřeba pro kartičku
-  const { key, title, original, author, authorKeys, year, cover, coverUrl, gbId, kcId, kcEbookId, rating, ratings, editions, pages, ebook, ebookAvail, ia } = b;
-  return { key, title, original, author, authorKeys, year, cover, coverUrl, gbId, kcId, kcEbookId, rating, ratings, editions, pages, ebook, ebookAvail, ia };
+  const { key, title, original, author, authorKeys, year, cover, coverUrl, gbId, kcId, kcEbookId, kcAudioId, rating, ratings, editions, pages, ebook, ebookAvail, audioAvail, ia } = b;
+  return { key, title, original, author, authorKeys, year, cover, coverUrl, gbId, kcId, kcEbookId, kcAudioId, rating, ratings, editions, pages, ebook, ebookAvail, audioAvail, ia };
 }
 
 // ===================== Barevná témata =====================
@@ -742,7 +748,8 @@ function syncGenres() {
 }
 document.querySelectorAll("#genreMode [data-gm]").forEach((b) => (b.onclick = () => { state.genreMode = b.dataset.gm; syncGenres(); search(); }));
 $("genreClear").onclick = () => { state.genres = []; syncGenres(); search(); };
-$("ebookOnly").onchange = () => { if (state.searched || state.mode === "author") search(); };
+const fmt = () => $("format").value; // "", "ebook" nebo "audio"
+$("format").onchange = () => { if (state.searched || state.mode === "author") search(); };
 const genreLabel = (id) => { const g = GENRES.find((x) => x[2] === id); return g ? `${g[0]} ${g[1]}` : id; };
 LANGS.forEach(([code, name]) => $("lang").add(new Option(name, code)));
 PERIODS.forEach(([id, name]) => $("period").add(new Option(name, id)));
@@ -935,7 +942,8 @@ async function search({ append = false, random = false } = {}) {
       sort === "rating" ? `ratings_count:[${lang ? 8 : 40} TO *]` : "",
     ].filter(Boolean).join(" ");
   }
-  if ($("ebookOnly").checked) q = [q, "ebook_access:[borrowable TO *]"].filter(Boolean).join(" ");
+  if (fmt() === "ebook") q = [q, "ebook_access:[borrowable TO *]"].filter(Boolean).join(" ");
+  if (fmt() === "audio") state.olMore = false; // Open Library audioknihy nemá
   if (q) p.set("q", q);
   if (lang) p.set("language", lang);
 
@@ -983,7 +991,7 @@ async function search({ append = false, random = false } = {}) {
 // ===================== Google Books =====================
 // vrací seznam dotazů – u „kterýkoli z žánrů“ jeden dotaz na každý žánr
 function gbSpecs() {
-  if (!GOOGLE_BOOKS_KEY) return [];
+  if (!GOOGLE_BOOKS_KEY || fmt() === "audio") return [];
   if (state.mode === "author") return state.author?.name ? [{ q: `inauthor:"${state.author.name}"`, cat: null }] : [];
   if ($("sort").value === "rating") return []; // žebříček jen z Open Library, Google Books má málo hodnocení
   const lang = $("lang").value;
@@ -1006,7 +1014,7 @@ async function fetchGB(page, signal) {
   if (page === 1) state.gbStarts = specs.map(() => 0);
   const lang = GB_LANG[$("lang").value];
   const range = state.mode !== "author" ? PERIODS.find((x) => x[0] === $("period").value)?.[2] : null;
-  const ebooks = $("ebookOnly").checked;
+  const ebooks = fmt() === "ebook";
   const newest = state.mode === "author" || $("sort").value === "new" || $("period").value === "new";
   // u jednoho dotazu dotáhneme až 3 várky (po odfiltrování často zbude málo), u více dotazů po jedné
   const rounds = specs.length === 1 ? 3 : 1;
@@ -1087,6 +1095,16 @@ function kcSpec(forLucky = false) {
   return { lookfor: "romány", type: "Subject" }; // úvodní stránka: nejnovější české romány
 }
 
+// knihy, e-knihy a audioknihy (ne hry, filmy, články…)
+const KC_BOOKISH = ["0/BOOKS/", "0/EBOOK/", "0/AUDIO/", "0/EAUDIOBOOK/"];
+function kcFormatFilter(p, f) {
+  if (f === "ebook") p.append("filter[]", 'record_format_facet_mv:"0/EBOOK/"');
+  else if (f === "audio") {
+    p.append("filter[]", '~record_format_facet_mv:"0/AUDIO/"');
+    p.append("filter[]", '~record_format_facet_mv:"0/EAUDIOBOOK/"');
+  } else if (f === "print") p.append("filter[]", 'record_format_facet_mv:"0/BOOKS/"');
+}
+
 const kcParams = (params) => {
   const p = new URLSearchParams(params);
   KC_FIELDS.forEach((f) => p.append("field[]", f));
@@ -1102,14 +1120,13 @@ async function fetchKC(page, signal) {
   if (lang) p.append("filter[]", `language:"${lang}"`);
   const range = state.mode !== "author" ? PERIODS.find((x) => x[0] === $("period").value)?.[2] : null;
   if (range) p.append("filter[]", `publishDate:[${range[0]} TO ${range[1]}]`);
-  if ($("ebookOnly").checked) p.append("filter[]", 'record_format_facet_mv:"0/EBOOK/"'); // jen e-knihy už v katalogu
+  kcFormatFilter(p, fmt()); // jen e-knihy / audioknihy už v katalogu
   if (state.mode === "author" || $("sort").value === "new" || $("period").value === "new") p.set("sort", "publishDateSort desc");
   const r = await fetch(`${KC_API}/search?${p}`, { signal });
   if (!r.ok) throw new Error(r.status);
   const data = await r.json();
   const recs = data.records || [];
-  const ebooks = $("ebookOnly").checked;
-  let books = recs.filter((x) => x.title && (x.formats || []).some((f) => f === "0/EBOOK/" || (!ebooks && f === "0/BOOKS/")))
+  let books = recs.filter((x) => x.title && (x.formats || []).some((f) => KC_BOOKISH.includes(f)))
     .map(toKCBook).filter((b) => !moodExcluded(b) && (!spec.author || sameAuthor(b, spec.author)));
   if (state.mode === "mood" && state.mood?.pages) {
     const [lo, hi] = state.mood.pages;
@@ -1135,6 +1152,7 @@ function toKCBook(r) {
     coverUrl: isbn ? `https://www.knihovny.cz/Cover/Show?isbn=${isbn}&size=medium` : null,
     pages: +(String(r.physicalDescriptions?.[0] || "").match(/(\d+)\s*stran/) || [])[1] || null,
     ebookAvail: (r.formats || []).includes("0/EBOOK/"),
+    audioAvail: (r.formats || []).some((f) => f === "0/AUDIO/" || f === "0/EAUDIOBOOK/"),
     tagsText: plain([r.title, kcSubjects(r).join(" "), (r.summary || []).join(" ").slice(0, 400)].join(" ")),
   };
   cache.set(book.key, book);
@@ -1178,6 +1196,7 @@ function mergeBooks(olBooks, gbBooks, kcBooks = []) {
   const olNew = add(olBooks);
   const kcNew = add(kcBooks, (twin, b) => {
     if (b.ebookAvail) { twin.ebookAvail = true; twin.kcEbookId = b.kcId; }
+    if (b.audioAvail) { twin.audioAvail = true; twin.kcAudioId = b.kcId; }
     if (!twin.kcId && !twin.key.startsWith("kc:")) twin.kcId = b.kcId;
     if (!twin.cover && !twin.coverUrl) twin.coverUrl = b.coverUrl;
   });
@@ -1310,7 +1329,7 @@ function render() {
     $("more").hidden = !(state.olMore || state.gbMore || state.kcMore);
     if (!state.books.length) {
       $("status").textContent = "";
-      grid.innerHTML = `<div class="empty"><b>🔍</b>Nic jsme nenašli. Zkus jiný žánr, jazyk nebo období${$("ebookOnly").checked ? ", nebo vypni „jen e-knihy“" : ""}.</div>`;
+      grid.innerHTML = `<div class="empty"><b>🔍</b>Nic jsme nenašli. Zkus jiný žánr, jazyk nebo období${fmt() ? ", nebo přepni formát na „Všechny knihy“" : ""}.</div>`;
     }
     updateAuthorInfo();
     // v češtině je nových knih v databázi málo – nabídneme novinky ze světa nebo starší knihy
@@ -1372,7 +1391,7 @@ function card(book) {
           `<button class="qbtn ${inList(id, book.key) ? "on" : ""}" data-list="${id}" aria-label="${l.add}" title="${l.add}">${l.icon}</button>`).join("")}
       </div>
       ${mine ? `<span class="mine">Tvoje ★ ${mine.stars}</span>` : ""}
-      ${book.ebookAvail ? `<span class="ebadge" title="Existuje i jako e-kniha">📱 e-kniha</span>` : ""}
+      ${book.ebookAvail || book.audioAvail ? `<span class="ebadge" title="Existuje i jako ${[book.ebookAvail && "e-kniha", book.audioAvail && "audiokniha"].filter(Boolean).join(" a ")}">${[book.ebookAvail && "📱 e-kniha", book.audioAvail && "🎧 audio"].filter(Boolean).join(" · ")}</span>` : ""}
     </div>
     <h3>${esc(book.title)}</h3>
     <p class="author">${esc(book.author || "Neznámý autor")}</p>
@@ -1455,6 +1474,7 @@ async function openBook(id, src = "ol") {
               ${publisher ? `<div class="fact"><b>${esc(publisher)}</b>nakladatel</div>` : ""}
               ${book.editions ? `<div class="fact"><b>${book.editions}</b>vydání</div>` : ""}
               ${book.ebookAvail ? `<div class="fact"><b>📱 ano</b>e-kniha</div>` : ""}
+              ${book.audioAvail ? `<div class="fact"><b>🎧 ano</b>audiokniha</div>` : ""}
               <div class="fact" id="bSeriesFact" hidden></div>
             </div>
             <div class="actions" style="margin-top:0">
@@ -1513,6 +1533,8 @@ async function openBook(id, src = "ol") {
           ${vol?.saleInfo?.isEbook && vol.saleInfo.buyLink ? `<a href="${esc(vol.saleInfo.buyLink)}" target="_blank" rel="noopener">📱 E-kniha na Google Play</a>` : ""}
           ${(isKC && book.ebookAvail) || book.kcEbookId ? `<a href="https://www.knihovny.cz/Record/${encodeURIComponent(book.kcEbookId || id)}" target="_blank" rel="noopener">📱 E-výpůjčka v knihovně</a>` : ""}
           <a href="https://www.palmknihy.cz/vyhledavani?query=${q}" target="_blank" rel="noopener">📱 Hledat e-knihu (Palmknihy)</a>
+          ${(isKC && book.audioAvail) || book.kcAudioId ? `<a href="https://www.knihovny.cz/Record/${encodeURIComponent(book.kcAudioId || id)}" target="_blank" rel="noopener">🎧 Audiokniha v knihovně</a>` : ""}
+          <a href="https://www.audiolibrix.com/cs/Search/Results?query=${q}" target="_blank" rel="noopener">🎧 Hledat audioknihu (Audiolibrix)</a>
           <a href="https://www.databazeknih.cz/search?q=${q}" target="_blank" rel="noopener">📘 Databáze knih</a>
           ${isGB
             ? `<a href="${esc(vol?.volumeInfo?.infoLink || "https://books.google.com/books?id=" + id)}" target="_blank" rel="noopener">📗 Google Books</a>`
@@ -2117,12 +2139,13 @@ function luckyParams(level, genreQ) {
     "cover_i:[* TO *]",                                          // jen knihy s obálkou
     level < 2 ? `readinglog_count:[${lang ? 1 : 15} TO *]` : "",  // aspoň trochu známé knihy
     level < 1 ? periodQuery($("period").value) : "",
-    $("ebookOnly").checked ? "ebook_access:[borrowable TO *]" : "",
+    fmt() === "ebook" ? "ebook_access:[borrowable TO *]" : "",
   ].filter(Boolean).join(" "));
   return p;
 }
 
 async function luckyOL() {
+  if (fmt() === "audio") return [];
   const genreQ = olGenreQuery(state.genres, state.genreMode);
   if (genreQ === null) return []; // vybraný žánr Open Library nezná – nelosujeme odjinud
   for (let level = 0; level < 3; level++) {
@@ -2141,7 +2164,7 @@ async function luckyKC() {
     const lang = KC_LANG[$("lang").value];
     if (lang) p.append("filter[]", `language:"${lang}"`);
     if (withPeriod) p.append("filter[]", `publishDate:[${range[0]} TO ${range[1]}]`);
-    p.append("filter[]", `record_format_facet_mv:"${$("ebookOnly").checked ? "0/EBOOK/" : "0/BOOKS/"}"`);
+    kcFormatFilter(p, fmt() || "print");
     const count = (await (await fetch(`${KC_API}/search?${p}`)).json()).resultCount || 0;
     if (!count) continue;
     p.set("limit", 20);
@@ -2157,7 +2180,7 @@ async function luckyKC() {
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 async function nextLucky() {
-  const filters = [state.genres.join(","), state.genreMode, $("lang").value, $("period").value, $("q").value, $("ebookOnly").checked].join("|");
+  const filters = [state.genres.join(","), state.genreMode, $("lang").value, $("period").value, $("q").value, fmt()].join("|");
   if (filters !== lucky.filters) { lucky.filters = filters; lucky.queue = []; }
   for (let attempt = 0; !lucky.queue.length && attempt < 2; attempt++) {
     const [ol, kc] = await Promise.allSettled([luckyOL(), luckyKC()]);
@@ -2515,6 +2538,14 @@ $("search").onclick = () => { if (state.mode === "author") { state.author = null
 $("surprise").onclick = surprise;
 $("top").onclick = () => { $("sort").value = "rating"; search(); };
 $("more").onclick = () => { state.page++; search({ append: true }); };
+// další knihy se načtou samy, když se tlačítko „Načíst další“ blíží k okraji obrazovky
+function autoMore() {
+  const more = $("more");
+  if (more.hidden || state.view !== "results" || $("status").textContent.startsWith("Hled") || !$("book").hidden || !$("seriesPage").hidden) return;
+  if (more.getBoundingClientRect().top < innerHeight + 600) more.click();
+}
+let autoMoreTimer = null;
+addEventListener("scroll", () => { clearTimeout(autoMoreTimer); autoMoreTimer = setTimeout(autoMore, 150); }, { passive: true });
 $("q").onkeydown = (e) => { if (e.key === "Enter") { e.target.blur(); $("search").click(); } };
 $("logo").onclick = (e) => { e.preventDefault(); location.hash = ""; setMode("genre"); window.scrollTo({ top: 0, behavior: "smooth" }); };
 document.addEventListener("keydown", (e) => {
