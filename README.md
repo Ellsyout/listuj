@@ -29,3 +29,52 @@ python -m http.server 5174
 ```
 
 a otevřít http://localhost:5174.
+
+## Jak je kód uspořádaný
+
+Aplikace nepotřebuje žádné sestavování, prohlížeč načítá soubory přímo.
+
+| Soubor | Co v něm je |
+|---|---|
+| `index.html` | kostra stránky |
+| `css/styles.css` | vzhled a barevná témata |
+| `js/config.js` | nastavení: žánry, jazyky, období, klíče a adresy zdrojů |
+| `js/pure.js` | pomocné funkce bez vazby na stránku (pokryté testy) |
+| `js/storage.js` | ukládání do prohlížeče, seznamy, barevná témata |
+| `js/search.js` | hledání ve všech třech zdrojích, režimy, autor |
+| `js/render.js` | mřížka výsledků a kartičky knih |
+| `js/book.js` | stránka knihy, podobné knihy, historie |
+| `js/series.js` | série a navazující díly |
+| `js/extras.js` | Překvap mě, narozeniny spisovatelů |
+| `js/diary.js` | deník, záloha, sdílení, sledování, Pro tebe, uvítání, O aplikaci |
+| `js/omni.js` | našeptávač podle názvu, překlad popisů |
+| `js/main.js` | adresy stránek (trasy) a spuštění |
+
+Soubory se načítají v tomto pořadí a sdílejí společné proměnné.
+
+## Testy
+
+```
+node --test tests/pure.test.mjs
+```
+
+Testy pokrývají funkce z `js/pure.js`: rozbor věty v hledání vlastními slovy, spojování stejných knih z více zdrojů, rozpoznání dílu série, filtr délky a nastavení žánrů.
+
+## Vydání nové verze
+
+```
+node --test tests/pure.test.mjs
+node tools/stamp.mjs
+git add -A
+git commit -m "popis změny"
+git push
+```
+
+`tools/stamp.mjs` změní označení verze u css/js souborů, aby prohlížeče nenačítaly staré kopie. Web na GitHub Pages se aktualizuje asi do minuty.
+
+## Zpětná vazba a statistika
+
+V `js/config.js` jsou dvě nastavení, prázdná hodnota znamená vypnuto:
+
+- `FEEDBACK_ENDPOINT`: adresa formuláře [Formspree](https://formspree.io) pro „Napiš nám“
+- `GOATCOUNTER`: název účtu [GoatCounter](https://www.goatcounter.com) pro anonymní počítání návštěv
