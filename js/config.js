@@ -72,7 +72,7 @@ const GOOGLE_BOOKS_KEY = "AIzaSyDgCXb48CTtw9teme13RL7U5-nUi3WFcmM";
 const GB_API = "https://www.googleapis.com/books/v1/volumes";
 
 // ---- Zpětná vazba a statistika – prázdná hodnota = vypnuto ----
-const FEEDBACK_ENDPOINT = ""; // adresa formuláře Formspree, např. "https://formspree.io/f/abcdwxyz"
+const FEEDBACK_ENDPOINT = "https://formspree.io/f/mdekjqkw"; // formulář „Napiš nám“ (Formspree)
 const GOATCOUNTER = "";       // název účtu GoatCounter, např. "listuj" (z adresy listuj.goatcounter.com)
 
 // délka knihy podle počtu stran
