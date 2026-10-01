@@ -172,6 +172,34 @@
   .btn.ghost.on { outline: 2px solid var(--a1); }
   .btn:disabled { opacity: .5; cursor: default; transform: none; box-shadow: none; }
 
+  /* ===== Čtenářský deník ===== */
+  .diary { display: grid; gap: 20px; }
+  .diary h2 { font-size: 1.15rem; margin: 0 0 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .dtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .dtile { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .dtile b { display: block; font-size: 1.7rem; line-height: 1.1; letter-spacing: -.02em; overflow-wrap: anywhere; }
+  .dtile span { color: var(--muted); font-size: .85rem; }
+  .months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 120px; margin-top: 18px; }
+  .months div { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; font-size: .7rem; color: var(--muted); }
+  .months i { display: block; width: 100%; max-width: 34px; background: var(--grad); border-radius: 6px 6px 2px 2px; min-height: 3px; }
+  .months i.zero { background: var(--soft); }
+  .goal { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; font-size: .92rem; }
+  .goal input { width: 84px; padding: 9px 10px; }
+  .years { display: flex; gap: 6px; flex-wrap: wrap; }
+  .years .chip { padding: 5px 12px; font-size: .85rem; }
+  .cap { font-size: .76rem; color: var(--muted); margin-top: 4px; line-height: 1.3; }
+  .card .mini-btn { margin-top: 8px; width: 100%; min-height: 36px; padding: 6px 8px; font-size: .82rem; }
+  .date-row { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: .9rem; flex-wrap: wrap; }
+  .date-row input { width: auto; padding: 7px 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
+    background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: 12px; font-weight: 600; font-size: .92rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35); max-width: calc(100% - 32px); text-align: center; animation: slide .2s ease-out;
+  }
+  .home-strip .strip { grid-auto-columns: 140px; }
+  .chip.new { border-color: var(--a1); font-weight: 700; }
+  @media (max-width: 560px) { .months { height: 90px; gap: 3px; } .home-strip .strip { grid-auto-columns: 120px; margin: 0 -16px; padding: 4px 16px 10px; } }
+
   /* ===== Narozeniny spisovatelů ===== */
   .bday { margin-top: 30px; }
   .bday-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -497,6 +525,8 @@
       </div>
     </section>
 
+    <section class="bday home-strip" id="forYou" hidden></section>
+    <section class="bday home-strip" id="followed" hidden></section>
     <section class="bday" id="bday" hidden></section>
 
     <section class="author-box" id="authorBox" hidden></section>
@@ -508,6 +538,7 @@
 
     <div class="grid-hint" id="gridHint" hidden></div>
     <div class="grid" id="grid"></div>
+    <div class="diary" id="diary" hidden></div>
     <div class="more"><button class="btn ghost" id="more" hidden>Načíst další</button></div>
   </div>
 </div>
@@ -573,9 +604,15 @@ const THEMES = [
 
 // Uložené seznamy (v prohlížeči)
 const LISTS = {
-  fav:  { store: "oblibene",        icon: "♥",  label: "Oblíbené",        add: "Přidat do oblíbených",     empty: "Zatím nemáš žádné oblíbené knihy. Přidáš je srdíčkem ♥." },
-  want: { store: "chci-si-precist", icon: "🔖", label: "Chci si přečíst", add: "Uložit na později",         empty: "Tady budou knihy, které si chceš přečíst. Uložíš je záložkou 🔖." },
+  fav:  { store: "oblibene",        icon: "♥",  label: "Oblíbené",        add: "Přidat do oblíbených",     empty: "Zatím nemáš žádné oblíbené knihy. Přidáš je srdíčkem ♥.", quick: true },
+  want: { store: "chci-si-precist", icon: "🔖", label: "Chci si přečíst", add: "Uložit na později",         empty: "Tady budou knihy, které si chceš přečíst. Uložíš je záložkou 🔖.", quick: true },
+  reading: { store: "ctu",          icon: "📖", label: "Právě čtu",       add: "Právě čtu" },
+  read:    { store: "precteno",     icon: "✅", label: "Přečteno",        add: "Mám přečteno" },
 };
+// kniha může být jen v jednom z těchto stavů (oblíbené jsou zvlášť)
+const STATUS = ["want", "reading", "read"];
+// všechno, co si aplikace ukládá do prohlížeče (pro zálohu)
+const BACKUP_KEYS = ["oblibene", "chci-si-precist", "ctu", "precteno", "moje-hodnoceni", "prectene-dily", "vyzva", "sledovani", "tema"];
 
 const API = "https://openlibrary.org";
 
@@ -696,9 +733,30 @@ let myRatings = store.get("moje-hodnoceni", {}); // key -> { stars, text, date, 
 
 const inList = (id, key) => lists[id].some((b) => b.key === key);
 function toggleList(id, book) {
-  lists[id] = inList(id, book.key) ? lists[id].filter((b) => b.key !== book.key) : [slim(book), ...lists[id]];
+  const had = inList(id, book.key);
+  if (!had && STATUS.includes(id)) {
+    // „Přečteno“ knihu vyřadí z „Právě čtu“ a „Chci si přečíst“ apod.
+    STATUS.filter((x) => x !== id && inList(x, book.key)).forEach((x) => {
+      lists[x] = lists[x].filter((b) => b.key !== book.key);
+      store.set(LISTS[x].store, lists[x]);
+    });
+  }
+  lists[id] = had ? lists[id].filter((b) => b.key !== book.key) : [{ ...slim(book), at: Date.now() }, ...lists[id]];
   store.set(LISTS[id].store, lists[id]);
   renderTabs();
+}
+// knihy, které už uživatel zná (v seznamech nebo ohodnocené) – ty nedoporučujeme
+function knownKeys() {
+  const all = [...Object.values(lists).flat(), ...Object.values(myRatings).map((r) => r.book)];
+  return new Set(all.map((b) => normKey(b.title, b.author)));
+}
+function toast(text) {
+  document.querySelector(".toast")?.remove();
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
 }
 function slim(b) { // ukládáme jen to, co je potřeba pro kartičku
   const { key, title, original, author, authorKeys, year, cover, coverUrl, gbId, kcId, kcEbookId, kcAudioId, rating, ratings, editions, pages, ebook, ebookAvail, audioAvail, ia } = b;
@@ -862,6 +920,7 @@ function activeText() {
 function renderTabs() {
   const tabs = [
     ["results", "Výsledky"],
+    ["diary", `📔 Můj deník (${lists.reading.length + lists.read.length})`],
     ["fav", `♥ Oblíbené (${lists.fav.length})`],
     ["want", `🔖 Chci si přečíst (${lists.want.length})`],
     ["rated", `⭐ Moje hodnocení (${Object.keys(myRatings).length})`],
@@ -1173,7 +1232,7 @@ const kcSubjects = (r) => [...new Set((r?.subjects || []).map((x) => x[0]).filte
 
 // stejná kniha z obou databází: název (bez závorky) + příjmení autora, bez diakritiky
 function normKey(title, author) {
-  const t = String(title || "").split("(")[0];
+  const t = String(title || "").split("(")[0].replace(/&/g, " a "); // „Harry Potter & kámen mudrců“ = „… a kámen mudrců“
   const a = String(author || "").split(", ")[0].trim().split(/\s+/).pop() || "";
   return (t + a).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -1254,7 +1313,8 @@ function showNameAuthor(name) {
   $("authorBox").hidden = false;
   $("authorBox").innerHTML = `
     <div class="avatar">${esc(initials(name))}</div>
-    <div><h2>${esc(name)}</h2><p class="sub"><span id="aCount">…</span></p><div id="aHint"></div></div>`;
+    <div><h2>${esc(name)}</h2><p class="sub"><span id="aCount">…</span></p><span id="aFollowSlot"></span><div id="aHint"></div></div>`;
+  mountAuthorFollow();
   search();
 }
 
@@ -1274,7 +1334,8 @@ async function loadAuthor(id) {
 
   try {
     if (!a) {
-      box.innerHTML = `<div class="avatar">${esc(initials(state.author.name))}</div><div><h2>${esc(state.author.name || "Autor")}</h2><p class="sub"><span id="aCount">…</span></p><div id="aHint"></div></div>`;
+      box.innerHTML = `<div class="avatar">${esc(initials(state.author.name))}</div><div><h2>${esc(state.author.name || "Autor")}</h2><p class="sub"><span id="aCount">…</span></p><span id="aFollowSlot"></span><div id="aHint"></div></div>`;
+      mountAuthorFollow();
       return;
     }
     if (!$("q").value) $("q").value = state.author.name;
@@ -1287,11 +1348,13 @@ async function loadAuthor(id) {
       <div>
         <h2>${esc(state.author.name)}</h2>
         <p class="sub">${years ? esc(years) + " · " : ""}<span id="aCount">…</span></p>
+        <span id="aFollowSlot"></span>
         <p class="bio" id="aBio"></p>
         <button class="linkbtn" id="aBioMore" hidden>Zobrazit celý životopis</button>
         <div id="aHint"></div>
         ${alts.length ? `<div class="others">Hledal/a jsi jiného autora? ${alts.map((x) => `<a class="linkbtn" href="#autor/${x.key}">${esc(x.name)}</a>`).join(" · ")}</div>` : ""}
       </div>`;
+    mountAuthorFollow();
     updateAuthorInfo();
     const bio = typeof a.bio === "string" ? a.bio : a.bio?.value;
     if (bio) {
@@ -1322,6 +1385,14 @@ function render() {
   const grid = $("grid");
   grid.innerHTML = "";
   let books;
+  const diary = state.view === "diary";
+  $("diary").hidden = !diary;
+  grid.hidden = diary;
+  if (diary) {
+    $("more").hidden = $("gridHint").hidden = true;
+    $("status").textContent = "";
+    return renderDiary();
+  }
 
   if (state.view === "results") {
     books = state.books;
@@ -1387,7 +1458,7 @@ function card(book) {
   el.innerHTML = `
     <div class="cover">${coverHtml(book)}
       <div class="quick">
-        ${Object.entries(LISTS).map(([id, l]) =>
+        ${Object.entries(LISTS).filter(([, l]) => l.quick).map(([id, l]) =>
           `<button class="qbtn ${inList(id, book.key) ? "on" : ""}" data-list="${id}" aria-label="${l.add}" title="${l.add}">${l.icon}</button>`).join("")}
       </div>
       ${mine ? `<span class="mine">Tvoje ★ ${mine.stars}</span>` : ""}
@@ -1423,7 +1494,7 @@ async function openBook(id, src = "ol") {
   const isGB = src === "gb", isKC = src === "kc";
   const key = isGB ? "gb:" + id : isKC ? "kc:" + id : "/works/" + id;
   const page = $("book");
-  let book = cache.get(key) || lists.fav.concat(lists.want).find((b) => b.key === key) || myRatings[key]?.book;
+  let book = cache.get(key) || Object.values(lists).flat().find((b) => b.key === key) || myRatings[key]?.book;
   let vol = null, rec = null; // podrobnosti z Google Books / z knihoven
   if (isGB) {
     try { vol = await (await fetch(`${GB_API}/${id}?key=${GOOGLE_BOOKS_KEY}`)).json(); if (!vol.volumeInfo) vol = null; } catch {}
@@ -1481,7 +1552,9 @@ async function openBook(id, src = "ol") {
               ${readBtn || gbRead}
               ${Object.entries(LISTS).map(([lid, l]) => `<button class="btn ghost" data-list="${lid}">${l.icon} ${l.label}</button>`).join("")}
               <button class="btn ghost" id="bGoReviews">⭐ Recenze</button>
+              <button class="btn ghost" id="bShare">📤 Sdílet</button>
             </div>
+            <p class="date-row" id="bReadRow" hidden>✅ Dočteno <input type="date" id="bReadDate" aria-label="Datum dočtení"></p>
             <div class="tags" id="bTags"></div>
           </div>
         </div>
@@ -1559,11 +1632,23 @@ async function openBook(id, src = "ol") {
   document.body.style.overflow = "hidden";
 
   $("back").onclick = () => { if (state.fromApp) history.back(); else location.hash = state.author ? "autor/" + state.author.key : ""; };
-  page.querySelectorAll("[data-list]").forEach((b) => {
-    const sync = () => b.classList.toggle("on", inList(b.dataset.list, book.key));
-    sync();
-    b.onclick = () => { toggleList(b.dataset.list, book); sync(); };
-  });
+  const listBtns = [...page.querySelectorAll(".book-main [data-list]")];
+  const syncLists = () => {
+    listBtns.forEach((b) => b.classList.toggle("on", inList(b.dataset.list, book.key)));
+    const entry = lists.read.find((b) => b.key === book.key);
+    $("bReadRow").hidden = !entry;
+    if (entry) $("bReadDate").value = isoDate(entry.at);
+  };
+  syncLists();
+  listBtns.forEach((b) => (b.onclick = () => { toggleList(b.dataset.list, book); syncLists(); }));
+  $("bReadDate").max = isoDate(Date.now());
+  $("bReadDate").onchange = (e) => {
+    const entry = lists.read.find((b) => b.key === book.key);
+    if (!entry || !e.target.value) return;
+    entry.at = new Date(e.target.value + "T12:00").getTime();
+    store.set(LISTS.read.store, lists.read);
+  };
+  $("bShare").onclick = () => shareBook(book);
   $("bGoReviews").onclick = () => $("bReviews").scrollIntoView({ behavior: "smooth" });
   setupMyRating(book);
 
@@ -1788,9 +1873,26 @@ async function loadMoreByAuthorKC(book) {
 
 // Podobné knihy: podle témat knihy, ale od jiných autorů
 const GENERIC_SUBJECT = /^(fiction|fiction, general|general|english literature|american literature|accessible book|protected daisy|in library|large type books|lending library|open library staff picks|nyt:|reading level|literature|juvenile literature|romance fiction)/i;
-const GENERIC_KC = /^(české romány|romány|české prózy|prózy|beletrie|ženy|muži|česká literatura)$/i;
+// příliš obecná témata a formáty („E-knihy“) – podle nich podobné knihy nehledáme
+const GENERIC_KC = /^(české romány|romány|české prózy|prózy|beletrie|ženy|muži|česká literatura|e-knihy|elektronické knihy|audioknihy|zvukové knihy|mluvené slovo|publikace pro děti|knihy)$/i;
 
 async function loadSimilar(book, info = {}) {
+  showStrip("bSimSec", "bSim", book, await similarFromInfo(book, info));
+}
+
+// témata knihy (pro doporučení), když zrovna není otevřená její stránka
+async function bookInfo(book) {
+  try {
+    if (book.key.startsWith("gb:")) {
+      const v = await (await fetch(`${GB_API}/${book.gbId}?key=${GOOGLE_BOOKS_KEY}`)).json();
+      return { cats: [...new Set((v.volumeInfo?.categories || []).map((c) => c.split(" / ").pop()))] };
+    }
+    if (book.key.startsWith("kc:")) return { kcSubjects: kcSubjects((await (await fetch(kcRecordUrl(book.kcId))).json()).records?.[0]) };
+    return { subjects: (await (await fetch(`${API}${book.key}.json`)).json()).subjects || [] };
+  } catch { return {}; }
+}
+
+async function similarFromInfo(book, info = {}) {
   const lang = $("lang").value;
   const firstAuthor = (book.author || "").split(", ")[0];
   const other = (b) => b.key !== book.key && (b.author || "").split(", ")[0] !== firstAuthor;
@@ -1820,7 +1922,7 @@ async function loadSimilar(book, info = {}) {
       books = items.filter((it) => it.volumeInfo.title && it.volumeInfo.authors && (!gl || it.volumeInfo.language === gl)).map(toGBook).filter(other);
     }
   } catch {}
-  showStrip("bSimSec", "bSim", book, books);
+  return books;
 }
 
 // ===================== Série a navazující díly =====================
@@ -2043,6 +2145,7 @@ async function openSeries(id) {
       ${back}
       <h1>📚 ${esc(data.name)}</h1>
       <p class="by">${numbered.length} ${plural(numbered.length, "díl", "díly", "dílů")}${data.author ? " · " + esc(data.author) : ""}</p>
+      <div class="actions" style="margin:12px 0 0"><button class="btn ghost" id="sFollow" style="min-height:40px;padding:8px 14px"></button></div>
       <div class="sprog"><i id="sProgBar"></i></div>
       <p class="status" id="sProg"></p>
       <div class="actions" id="sNextBox"></div>
@@ -2058,6 +2161,20 @@ async function openSeries(id) {
     updateSeriesProgress(data);
   }));
   updateSeriesProgress(data);
+  const syncFollow = () => {
+    const f = follows.series.find((x) => x.id === data.id);
+    if (f && f.count !== numbered.length) { f.count = numbered.length; store.set("sledovani", follows); } // otevřením série se „nový díl“ označí jako viděný
+    $("sFollow").textContent = f ? "🔔 Sérii sleduješ" : "🔔 Sledovat sérii";
+    $("sFollow").classList.toggle("on", !!f);
+  };
+  syncFollow();
+  $("sFollow").onclick = () => {
+    const on = follows.series.some((x) => x.id === data.id);
+    follows.series = on ? follows.series.filter((x) => x.id !== data.id) : [...follows.series, { id: data.id, name: data.name, author: data.author, count: numbered.length }];
+    store.set("sledovani", follows);
+    toast(on ? "Sérii už nesleduješ" : "Sérii sleduješ – nový díl uvidíš na úvodní stránce");
+    syncFollow();
+  };
 
   // obálky a krátké popisy dílů na pozadí
   data.parts.forEach(async (x, i) => {
@@ -2323,6 +2440,295 @@ async function loadBirthdays() {
   }));
 }
 
+// ===================== Čtenářský deník =====================
+const isoDate = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const czDate = (t) => { const d = new Date(t); return `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}`; };
+const MONTH_SHORT = ["led", "úno", "bře", "dub", "kvě", "čvn", "čvc", "srp", "zář", "říj", "lis", "pro"];
+
+function renderDiary() {
+  const box = $("diary");
+  const goals = store.get("vyzva", {});
+  const years = [...new Set([YEAR, ...lists.read.map((b) => new Date(b.at || Date.now()).getFullYear())])].sort((a, b) => b - a);
+  const year = years.includes(state.diaryYear) ? state.diaryYear : YEAR;
+  const done = lists.read.filter((b) => new Date(b.at || Date.now()).getFullYear() === year).sort((a, b) => (b.at || 0) - (a.at || 0));
+  const goal = +goals[year] || 0;
+
+  // tempo výzvy (jen u letošního roku)
+  let pace = "";
+  if (goal && year === YEAR) {
+    const start = new Date(YEAR, 0, 1), end = new Date(YEAR + 1, 0, 1);
+    const expected = Math.floor(goal * (Date.now() - start) / (end - start));
+    const diff = done.length - expected;
+    pace = done.length >= goal ? "Výzva splněna! 🎉"
+      : diff > 0 ? `Jsi o ${diff} ${plural(diff, "knihu", "knihy", "knih")} napřed 👏`
+      : diff < 0 ? `Do tempa ti ${plural(-diff, "chybí", "chybí", "chybí")} ${-diff} ${plural(-diff, "kniha", "knihy", "knih")} – to doženeš.`
+      : "Držíš přesně tempo 👍";
+  }
+
+  // statistiky roku
+  const pages = done.reduce((a, b) => a + (+b.pages || 0), 0);
+  const noPages = done.filter((b) => !b.pages).length;
+  const stars = done.map((b) => myRatings[b.key]?.stars).filter(Boolean);
+  const byAuthor = {};
+  done.forEach((b) => { const a = (b.author || "").split(", ")[0]; if (a) byAuthor[a] = (byAuthor[a] || 0) + 1; });
+  const top = Object.entries(byAuthor).sort((a, b) => b[1] - a[1])[0];
+  const perMonth = Array(12).fill(0);
+  done.forEach((b) => perMonth[new Date(b.at || Date.now()).getMonth()]++);
+  const maxMonth = Math.max(1, ...perMonth);
+
+  box.innerHTML = `
+    <div class="section" style="margin-top:0">
+      <h2>🏆 Čtenářská výzva ${year}
+        <span class="years">${years.map((y) => `<button class="chip" data-year="${y}" aria-pressed="${y === year}">${y}</button>`).join("")}</span></h2>
+      ${goal ? `
+        <div class="big">${done.length} <span style="font-size:1.2rem;color:var(--muted)">z ${goal} knih</span></div>
+        <div class="sprog" style="max-width:none"><i style="width:${Math.min(100, done.length / goal * 100)}%"></i></div>
+        <p class="status">${pace}</p>` : `<p class="status">Kolik knih chceš v roce ${year} přečíst? Nastav si cíl a deník bude hlídat tempo.</p>`}
+      <div class="goal">
+        <label for="goalInput">Můj cíl:</label>
+        <input id="goalInput" type="number" min="1" max="999" inputmode="numeric" value="${goal || ""}" placeholder="např. 20">
+        <span>knih</span>
+        <button class="btn ghost" id="goalSave" style="min-height:40px;padding:8px 14px">Uložit cíl</button>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:0">
+      <h2>📊 Rok ${year} v číslech</h2>
+      <div class="dtiles">
+        <div class="dtile"><b>${done.length}</b><span>${plural(done.length, "přečtená kniha", "přečtené knihy", "přečtených knih")}</span></div>
+        <div class="dtile"><b>${pages.toLocaleString("cs-CZ")}</b><span>stran${noPages && done.length ? ` (u ${noPages} ${plural(noPages, "knihy", "knih", "knih")} počet neznáme)` : ""}</span></div>
+        <div class="dtile"><b>${stars.length ? "★ " + (stars.reduce((a, b) => a + b, 0) / stars.length).toFixed(1) : "–"}</b><span>tvoje průměrné hodnocení</span></div>
+        <div class="dtile"><b style="font-size:1.15rem">${top ? esc(top[0]) : "–"}</b><span>${top ? `nejčtenější autor (${top[1]} ${plural(top[1], "kniha", "knihy", "knih")})` : "nejčtenější autor"}</span></div>
+      </div>
+      <div class="months" aria-label="Přečtené knihy po měsících">${perMonth.map((n, i) => `
+        <div title="${n} ${plural(n, "kniha", "knihy", "knih")}"><span>${n || ""}</span><i class="${n ? "" : "zero"}" style="height:${n ? Math.max(8, n / maxMonth * 100) : 3}%"></i><span>${MONTH_SHORT[i]}</span></div>`).join("")}
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:0">
+      <h2>📖 Právě čtu <small style="color:var(--muted);font-weight:500">${lists.reading.length || ""}</small></h2>
+      ${lists.reading.length ? `<div class="grid" id="dReading"></div>` : `<p class="status">Nic rozečteného. Na stránce knihy klikni na „📖 Právě čtu“.</p>`}
+    </div>
+
+    <div class="section" style="margin-top:0">
+      <h2>✅ Přečteno v roce ${year} <small style="color:var(--muted);font-weight:500">${done.length || ""}</small></h2>
+      ${done.length ? `<div class="grid" id="dRead"></div>` : `<p class="status">V roce ${year} zatím nic. Dočtenou knihu označíš tlačítkem „✅ Přečteno“ na její stránce.</p>`}
+    </div>
+
+    <div class="section" style="margin-top:0">
+      <h2>💾 Záloha a přenos na jiné zařízení</h2>
+      <p class="status" style="margin-bottom:12px">Deník, seznamy i hodnocení jsou uložené jen v tomto prohlížeči. Zálohu si stáhni jako soubor a na jiném zařízení (nebo po smazání dat) ji nahraj zpět.</p>
+      <div class="actions" style="margin:0">
+        <button class="btn" id="backupExport">⬇️ Stáhnout zálohu</button>
+        <button class="btn ghost" id="backupImport">⬆️ Nahrát zálohu</button>
+        <input type="file" id="backupFile" accept="application/json,.json" hidden>
+      </div>
+    </div>`;
+
+  box.querySelectorAll("[data-year]").forEach((b) => (b.onclick = () => { state.diaryYear = +b.dataset.year; renderDiary(); }));
+  $("goalSave").onclick = () => {
+    const n = Math.max(0, Math.min(999, parseInt($("goalInput").value) || 0));
+    const g = store.get("vyzva", {});
+    if (n) g[year] = n; else delete g[year];
+    store.set("vyzva", g);
+    toast(n ? `Cíl na rok ${year}: ${n} ${plural(n, "kniha", "knihy", "knih")}` : "Cíl zrušen");
+    renderDiary();
+  };
+  lists.reading.forEach((book) => {
+    const el = card(book);
+    const btn = document.createElement("button");
+    btn.className = "btn ghost mini-btn";
+    btn.textContent = "✅ Dočteno";
+    btn.onclick = (e) => { e.stopPropagation(); toggleList("read", book); toast(`„${book.title}“ je v přečtených 🎉`); render(); };
+    el.appendChild(btn);
+    $("dReading").appendChild(el);
+  });
+  done.forEach((book) => {
+    const el = card(book);
+    el.insertAdjacentHTML("beforeend", `<div class="cap">dočteno ${czDate(book.at || Date.now())}</div>`);
+    $("dRead").appendChild(el);
+  });
+  $("backupExport").onclick = exportBackup;
+  $("backupImport").onclick = () => $("backupFile").click();
+  $("backupFile").onchange = (e) => { if (e.target.files[0]) importBackup(e.target.files[0]); };
+}
+
+// ===================== Záloha =====================
+function exportBackup() {
+  const data = {};
+  BACKUP_KEYS.forEach((k) => { const v = store.get(k, null); if (v !== null) data[k] = v; });
+  const blob = new Blob([JSON.stringify({ app: "Listuj", version: 1, date: new Date().toISOString(), data }, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `listuj-zaloha-${isoDate(Date.now())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast("Záloha stažena");
+}
+
+// zálohu přidáme k tomu, co už v prohlížeči je (nic se nesmaže)
+function mergeBackup(data) {
+  const byKey = (cur, add) => { const have = new Set(cur.map((b) => b.key)); return [...cur, ...add.filter((b) => b && b.key && !have.has(b.key))]; };
+  for (const k of ["oblibene", "chci-si-precist", "ctu", "precteno"]) {
+    if (Array.isArray(data[k])) store.set(k, byKey(store.get(k, []), data[k]));
+  }
+  if (data["moje-hodnoceni"] && typeof data["moje-hodnoceni"] === "object") {
+    const cur = store.get("moje-hodnoceni", {});
+    for (const [key, r] of Object.entries(data["moje-hodnoceni"])) if (!cur[key] || (r.date || 0) > (cur[key].date || 0)) cur[key] = r;
+    store.set("moje-hodnoceni", cur);
+  }
+  if (Array.isArray(data["prectene-dily"])) store.set("prectene-dily", [...new Set([...store.get("prectene-dily", []), ...data["prectene-dily"]])]);
+  if (data.vyzva && typeof data.vyzva === "object") store.set("vyzva", { ...data.vyzva, ...store.get("vyzva", {}) });
+  if (data.sledovani) {
+    const cur = store.get("sledovani", { authors: [], series: [] });
+    const names = new Set(cur.authors.map((a) => plain(a.name)));
+    const ids = new Set(cur.series.map((x) => x.id));
+    cur.authors.push(...(data.sledovani.authors || []).filter((a) => a?.name && !names.has(plain(a.name))));
+    cur.series.push(...(data.sledovani.series || []).filter((x) => x?.id && !ids.has(x.id)));
+    store.set("sledovani", cur);
+  }
+}
+
+async function importBackup(file) {
+  let parsed;
+  try { parsed = JSON.parse(await file.text()); } catch { return toast("Tenhle soubor se nepodařilo přečíst."); }
+  if (parsed?.app !== "Listuj" || !parsed.data) return toast("Tohle není záloha z aplikace Listuj.");
+  const n = (parsed.data.precteno || []).length + (parsed.data.oblibene || []).length + (parsed.data["chci-si-precist"] || []).length + (parsed.data.ctu || []).length;
+  if (!confirm(`Záloha z ${czDate(parsed.date)} obsahuje ${n} ${plural(n, "knihu", "knihy", "knih")} v seznamech.\n\nPřidáme ji k tomu, co tu už máš – nic se nesmaže. Pokračovat?`)) return;
+  mergeBackup(parsed.data);
+  toast("Záloha nahrána ✓");
+  setTimeout(() => location.reload(), 900);
+}
+
+// ===================== Sdílení knihy =====================
+async function shareBook(book) {
+  const url = location.origin + location.pathname + "#" + bookHash(book);
+  const data = { title: book.title, text: `${book.title}${book.author ? " – " + book.author : ""} · tip z aplikace Listuj`, url };
+  if (navigator.share) {
+    try { await navigator.share(data); return; } catch (e) { if (e.name === "AbortError") return; }
+  }
+  try { await navigator.clipboard.writeText(url); toast("Odkaz zkopírován – vlož ho do zprávy"); }
+  catch { prompt("Zkopíruj si odkaz na knihu:", url); }
+}
+
+// ===================== Sledování autorů a sérií =====================
+let follows = store.get("sledovani", { authors: [], series: [] });
+const followsAuthor = (a) => follows.authors.some((x) => (a.key && x.key === a.key) || plain(x.name) === plain(a.name || ""));
+function mountAuthorFollow() {
+  const slot = $("aFollowSlot");
+  if (!slot || !state.author?.name) return;
+  const me = { key: state.author.key || null, name: state.author.name };
+  const on = followsAuthor(me);
+  slot.innerHTML = `<button class="btn ghost ${on ? "on" : ""}" id="aFollow" style="min-height:38px;padding:6px 14px;margin:2px 0 10px">${on ? "🔔 Autora sleduješ" : "🔔 Sledovat autora"}</button>`;
+  $("aFollow").onclick = () => {
+    follows.authors = on ? follows.authors.filter((x) => !((me.key && x.key === me.key) || plain(x.name) === plain(me.name))) : [...follows.authors, me];
+    store.set("sledovani", follows);
+    toast(on ? "Autora už nesleduješ" : "Autora sleduješ – jeho novinky uvidíš na úvodní stránce");
+    mountAuthorFollow();
+  };
+}
+
+// úvodní stránka: novinky od sledovaných autorů (poslední 2 roky) a nové díly sledovaných sérií
+async function loadFollowed() {
+  const box = $("followed");
+  if (!follows.authors.length && !follows.series.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="bday-head"><h2>🔔 Sleduješ</h2><span>novinky od tvých autorů a sérií</span></div>
+    <div class="genres" style="margin-bottom:10px">
+      ${follows.authors.map((a) => `<a class="chip" href="${a.key ? "#autor/" + a.key : "#autor-jmeno/" + encodeURIComponent(a.name)}">✍️ ${esc(a.name)}</a>`).join("")}
+      ${follows.series.map((x, i) => `<a class="chip" id="fs-${i}" href="#serie/${encodeURIComponent(x.id)}">📚 ${esc(x.name)}</a>`).join("")}
+    </div>
+    <div class="strip" id="followedStrip"></div>
+    <p class="status" id="followedNote">${follows.authors.length ? "Hledám novinky…" : ""}</p>`;
+  box.querySelectorAll("a.chip").forEach((a) => (a.onclick = () => { state.fromApp = true; }));
+
+  const known = knownKeys();
+  const per = await Promise.all(follows.authors.slice(0, 8).map(async (a) => {
+    const out = [];
+    try { out.push(...(await kcSearch(`"${a.name}"`, "Author", 12)).filter((b) => sameAuthor(b, a.name))); } catch {}
+    if (a.key) {
+      try {
+        const p = new URLSearchParams({ author_key: a.key, sort: "new", limit: 6, fields: FIELDS });
+        if ($("lang").value) p.set("language", $("lang").value);
+        out.push(...(await (await fetch(`${API}/search.json?${p}`)).json()).docs.map(toBook));
+      } catch {}
+    }
+    return out.filter((b) => b.year >= YEAR - 1).map((b) => ({ b, who: a.name }));
+  }));
+  // od každého autora nejvýš 4 nejnovější knihy, autoři se střídají
+  const seen = new Set();
+  const lanes = per.map((list) => list.sort((x, y) => (y.b.year || 0) - (x.b.year || 0)).filter(({ b }) => {
+    const k = normKey(b.title, b.author);
+    if (seen.has(k) || known.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 4));
+  const fresh = [];
+  for (let i = 0; i < 4; i++) lanes.forEach((lane) => lane[i] && fresh.length < 14 && fresh.push(lane[i]));
+  if (!$("followedStrip")) return;
+  fresh.forEach(({ b, who }) => {
+    const el = card(b);
+    el.insertAdjacentHTML("beforeend", `<div class="cap">nové od: ${esc(who)}</div>`);
+    $("followedStrip").appendChild(el);
+  });
+  $("followedNote").textContent = fresh.length || !follows.authors.length ? "" : "Od sledovaných autorů teď není nic nového.";
+
+  // série: přibyl díl od doby, kdy ji uživatel naposledy otevřel?
+  follows.series.slice(0, 5).forEach(async (x, i) => {
+    try {
+      const d = await seriesById(x.id);
+      const n = d?.parts.filter((y) => y.num != null).length || 0;
+      if (d) seriesCache.set(x.id, d);
+      if (n > (x.count || 0) && $("fs-" + i)) { $("fs-" + i).classList.add("new"); $("fs-" + i).textContent = `📚 ${x.name} · nový díl!`; }
+    } catch {}
+  });
+}
+
+// ===================== Pro tebe: doporučení podle oblíbených a dobře hodnocených knih =====================
+async function loadForYou() {
+  const box = $("forYou");
+  const disliked = new Set(Object.entries(myRatings).filter(([, r]) => r.stars <= 2).map(([k]) => k));
+  const likedAll = [...lists.fav, ...Object.values(myRatings).filter((r) => r.stars >= 4).map((r) => r.book), ...lists.read, ...lists.reading]
+    .filter((b) => b && !disliked.has(b.key));
+  const liked = [...new Map(likedAll.map((b) => [b.key, b])).values()];
+  if (!liked.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="bday-head"><h2>✨ Pro tebe</h2><span>podle knih, které se ti líbily · <button class="linkbtn" id="forYouMore">↻ jiné tipy</button></span></div>
+    <div class="strip" id="forYouStrip">${skeletons(6)}</div>`;
+  $("forYouMore").onclick = loadForYou;
+
+  const seeds = shuffle([...liked]).slice(0, 3);
+  const known = knownKeys();
+  const per = await Promise.all(seeds.map(async (seed) => {
+    try { return (await similarFromInfo(seed, await bookInfo(seed))).map((b) => ({ b, seed })); } catch { return []; }
+  }));
+  // střídavě od každé „výchozí“ knihy, nejvýš 2 knihy od jednoho autora
+  const picks = [], seen = new Set(), perAuthor = {};
+  for (let i = 0; i < 20 && picks.length < 14; i++) {
+    for (const list of per) {
+      const x = list[i];
+      if (!x) continue;
+      const k = normKey(x.b.title, x.b.author), a = (x.b.author || "").split(", ")[0];
+      if (seen.has(k) || known.has(k) || perAuthor[a] >= 2) continue;
+      seen.add(k); perAuthor[a] = (perAuthor[a] || 0) + 1;
+      picks.push(x);
+    }
+  }
+  const strip = $("forYouStrip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  if (!picks.length) { strip.outerHTML = `<p class="status">Zatím jsme nenašli vhodné tipy. Přidej si pár knih do oblíbených nebo je ohodnoť.</p>`; return; }
+  picks.forEach(({ b, seed }) => {
+    const el = card(b);
+    el.insertAdjacentHTML("beforeend", `<div class="cap">protože se ti líbí: ${esc(seed.title)}</div>`);
+    strip.appendChild(el);
+  });
+}
+
 // ===================== Hledání knihy podle názvu (našeptávač) =====================
 // Při psaní nabízí konkrétní knihy a autory; klik otevře stránku knihy (s díly série a podobnými knihami).
 const omni = { timer: null, ctrl: null, items: [], active: -1, text: "" };
@@ -2558,6 +2964,8 @@ window.addEventListener("hashchange", () => { route(); });
 renderTabs();
 if (!location.hash.startsWith("#autor")) search();
 loadBirthdays();
+loadForYou();
+loadFollowed();
 route();
 </script>
 </body>

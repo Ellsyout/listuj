@@ -7,7 +7,11 @@ Webová aplikace, která ti pomůže najít další knihu ke čtení.
 - **Vlastními slovy**: napiš třeba „něco napínavého, ale ne horor“.
 - **🎲 Překvap mě**: jedna náhodná kniha.
 - **🎂 Dnes mají narozeniny**: spisovatelé narození v dnešní den.
-- **Oblíbené, Chci si přečíst a vlastní hodnocení**: ukládají se v prohlížeči.
+- **Hledání podle názvu**: našeptávač knih a autorů, série s navazujícími díly.
+- **Čtenářský deník**: Právě čtu, Přečteno, roční přehled a čtenářská výzva.
+- **Pro tebe**: tipy podle knih, které se ti líbily.
+- **Sledování autorů a sérií**: novinky na úvodní stránce.
+- **Oblíbené, Chci si přečíst a vlastní hodnocení**: ukládají se v prohlížeči, dají se zálohovat do souboru.
 
 ## Zdroje dat
 
