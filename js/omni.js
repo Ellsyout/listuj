@@ -157,15 +157,18 @@ document.addEventListener("click", (e) => { if (!e.target.closest(".omni")) $("o
 const translations = new Map();
 async function translate(text) {
   if (translations.has(text)) return translations.get(text);
+  const saved = cacheGet("tr:" + text, 24 * 30);
+  if (saved !== undefined) { translations.set(text, saved); return saved; }
   try {
     const chunks = text.match(/[\s\S]{1,1800}(?=\s|$)/g) || [text];
     const results = await Promise.all(chunks.map(async (chunk) => {
       const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=cs&dt=t&q=" + encodeURIComponent(chunk);
       return (await fetch(url)).json();
     }));
-    if (results[0][2] === "cs") return text; // už je česky
+    if (results[0][2] === "cs") { cacheSet("tr:" + text, text); return text; } // už je česky
     const out = results.map((j) => j[0].map((x) => x[0]).join("")).join(" ");
     translations.set(text, out);
+    cacheSet("tr:" + text, out);
     return out;
   } catch {
     return null;

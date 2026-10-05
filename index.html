@@ -12,9 +12,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/styles.css?v=20261005101300">
+<link rel="stylesheet" href="css/styles.css?v=20261005103143">
 </head>
 <body>
+<a class="skip" href="#tabs">Přeskočit na výsledky</a>
 
 <div id="home">
   <div class="wrap">
@@ -110,12 +111,13 @@
 
     <div class="bar">
       <div class="tabs" role="tablist" id="tabs"></div>
-      <p class="status" id="status"></p>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
     </div>
 
     <div class="grid-hint" id="gridHint" hidden></div>
     <div class="grid" id="grid"></div>
     <div class="diary" id="diary" hidden></div>
+    <div class="diary" id="charts" hidden></div>
     <div class="more"><button class="btn ghost" id="more" hidden>Načíst další</button></div>
     <footer class="foot">
       <a href="#o-aplikaci" id="footAbout">O aplikaci a soukromí</a><span id="footFbWrap" hidden> · <a href="#napis-nam" id="footFb">Napiš nám</a></span> · <button class="linkbtn" id="footBackup">Záloha dat</button>
@@ -127,19 +129,21 @@
 <article class="book" id="book" hidden></article>
 <article class="book" id="seriesPage" hidden></article>
 <article class="book about" id="about" hidden></article>
+<article class="book" id="listPage" hidden></article>
 <dialog id="welcome" aria-label="Vítej v aplikaci Listuj"></dialog>
 <dialog id="lucky" aria-label="Náhodná kniha"></dialog>
 
-<script src="js/config.js?v=20261005101300"></script>
-<script src="js/pure.js?v=20261005101300"></script>
-<script src="js/storage.js?v=20261005101300"></script>
-<script src="js/search.js?v=20261005101300"></script>
-<script src="js/render.js?v=20261005101300"></script>
-<script src="js/book.js?v=20261005101300"></script>
-<script src="js/series.js?v=20261005101300"></script>
-<script src="js/extras.js?v=20261005101300"></script>
-<script src="js/diary.js?v=20261005101300"></script>
-<script src="js/omni.js?v=20261005101300"></script>
-<script src="js/main.js?v=20261005101300"></script>
+<script src="js/config.js?v=20261005103143"></script>
+<script src="js/pure.js?v=20261005103143"></script>
+<script src="js/storage.js?v=20261005103143"></script>
+<script src="js/search.js?v=20261005103143"></script>
+<script src="js/render.js?v=20261005103143"></script>
+<script src="js/book.js?v=20261005103143"></script>
+<script src="js/series.js?v=20261005103143"></script>
+<script src="js/extras.js?v=20261005103143"></script>
+<script src="js/diary.js?v=20261005103143"></script>
+<script src="js/omni.js?v=20261005103143"></script>
+<script src="js/social.js?v=20261005103143"></script>
+<script src="js/main.js?v=20261005103143"></script>
 </body>
 </html>

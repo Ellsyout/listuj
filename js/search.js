@@ -102,6 +102,7 @@ function activeText() {
 function renderTabs() {
   const tabs = [
     ["results", "Výsledky"],
+    ["charts", "📈 Žebříčky"],
     ["diary", `📔 Můj deník (${lists.reading.length + lists.read.length})`],
     ["fav", `♥ Oblíbené (${lists.fav.length})`],
     ["want", `🔖 Chci si přečíst (${lists.want.length})`],
@@ -114,6 +115,16 @@ function renderTabs() {
     if (t.dataset.view === "results" && !state.searched && state.mode === "genre") search(); else render();
   }));
 }
+// záložky jdou přepínat i šipkami (jako u běžných záložek)
+$("tabs").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const tabs = [...$("tabs").querySelectorAll(".tab")];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+  next.focus();
+  next.click();
+});
 function showView(view) {
   state.view = view;
   $("tabs").querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === view)));

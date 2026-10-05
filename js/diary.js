@@ -67,9 +67,12 @@ function renderDiary() {
     </div>
 
     <div class="section" style="margin-top:0">
-      <h2>✅ Přečteno v roce ${year} <small style="color:var(--muted);font-weight:500">${done.length || ""}</small></h2>
+      <h2>✅ Přečteno v roce ${year} <small style="color:var(--muted);font-weight:500">${done.length || ""}</small>
+        ${done.length ? `<button class="linkbtn" id="shareRead">📤 Sdílet</button>` : ""}</h2>
       ${done.length ? `<div class="grid" id="dRead"></div>` : `<p class="status">V roce ${year} zatím nic. Dočtenou knihu označíš tlačítkem „✅ Přečteno“ na její stránce.</p>`}
     </div>
+
+    ${badgesHtml()}
 
     <div class="section" style="margin-top:0">
       <h2>💾 Záloha a přenos na jiné zařízení</h2>
@@ -87,6 +90,7 @@ function renderDiary() {
     const g = store.get("vyzva", {});
     if (n) g[year] = n; else delete g[year];
     store.set("vyzva", g);
+    checkBadges();
     toast(n ? `Cíl na rok ${year}: ${n} ${plural(n, "kniha", "knihy", "knih")}` : "Cíl zrušen");
     renderDiary();
   };
@@ -105,6 +109,7 @@ function renderDiary() {
     $("dRead").appendChild(el);
   });
   $("backupExport").onclick = exportBackup;
+  if ($("shareRead")) $("shareRead").onclick = () => shareList(`Co jsem přečetl/a v roce ${year}`, done);
   $("backupImport").onclick = () => $("backupFile").click();
   $("backupFile").onchange = (e) => { if (e.target.files[0]) importBackup(e.target.files[0]); };
 }
@@ -135,6 +140,7 @@ function mergeBackup(data) {
     for (const [key, r] of Object.entries(data["moje-hodnoceni"])) if (!cur[key] || (r.date || 0) > (cur[key].date || 0)) cur[key] = r;
     store.set("moje-hodnoceni", cur);
   }
+  if (data.odznaky && typeof data.odznaky === "object") store.set("odznaky", { ...data.odznaky, ...store.get("odznaky", {}) });
   if (Array.isArray(data["prectene-dily"])) store.set("prectene-dily", [...new Set([...store.get("prectene-dily", []), ...data["prectene-dily"]])]);
   if (data.vyzva && typeof data.vyzva === "object") store.set("vyzva", { ...data.vyzva, ...store.get("vyzva", {}) });
   if (data.uvitani && !store.get("uvitani", null)) store.set("uvitani", data.uvitani);

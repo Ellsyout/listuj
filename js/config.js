@@ -47,9 +47,9 @@ const periodQuery = (id) => {
 };
 
 const THEMES = [
-  ["indigo", "Indigo", "#6d5dfc", "#c04bff"], ["mata", "Máta", "#0e9f7e", "#2dc6d4"],
-  ["koral", "Korál", "#f2545b", "#ff9e3d"], ["ocean", "Oceán", "#1f63e8", "#1fb5e0"],
-  ["noc", "Noc", "#8b7bff", "#f062b0"], ["les", "Les", "#3ecf8e", "#c8e64a"],
+  ["indigo", "Indigo", "#6d5dfc", "#c04bff"], ["mata", "Máta", "#0e9f7e", "#23a0ab"],
+  ["koral", "Korál", "#f2545b", "#e07000"], ["ocean", "Oceán", "#1f63e8", "#1b9cc1"],
+  ["noc", "Noc", "#8b7bff", "#ef59ab"], ["les", "Les", "#3ecf8e", "#c8e64a"],
 ];
 
 // Uložené seznamy (v prohlížeči)
@@ -62,7 +62,7 @@ const LISTS = {
 // kniha může být jen v jednom z těchto stavů (oblíbené jsou zvlášť)
 const STATUS = ["want", "reading", "read"];
 // všechno, co si aplikace ukládá do prohlížeče (pro zálohu)
-const BACKUP_KEYS = ["oblibene", "chci-si-precist", "ctu", "precteno", "moje-hodnoceni", "prectene-dily", "vyzva", "sledovani", "tema", "uvitani"];
+const BACKUP_KEYS = ["oblibene", "chci-si-precist", "ctu", "precteno", "moje-hodnoceni", "prectene-dily", "vyzva", "sledovani", "tema", "uvitani", "odznaky"];
 
 const API = "https://openlibrary.org";
 

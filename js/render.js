@@ -3,13 +3,14 @@ function render() {
   const grid = $("grid");
   grid.innerHTML = "";
   let books;
-  const diary = state.view === "diary";
+  const diary = state.view === "diary", chartsView = state.view === "charts";
   $("diary").hidden = !diary;
-  grid.hidden = diary;
-  if (diary) {
+  $("charts").hidden = !chartsView;
+  grid.hidden = diary || chartsView;
+  if (diary || chartsView) {
     $("more").hidden = $("gridHint").hidden = true;
     $("status").textContent = "";
-    return renderDiary();
+    return diary ? renderDiary() : renderCharts();
   }
 
   if (state.view === "results") {
@@ -37,8 +38,14 @@ function render() {
       ? Object.values(myRatings).sort((a, b) => b.date - a.date).map((r) => r.book)
       : lists[state.view];
     $("more").hidden = true;
-    $("gridHint").hidden = true;
+    $("gridHint").hidden = !books.length || state.view === "rated";
     $("status").textContent = books.length ? `${books.length} ${plural(books.length, "kniha", "knihy", "knih")}` : "";
+    if (books.length && state.view !== "rated") {
+      // seznam jde poslat jako odkaz
+      const listName = { fav: "Moje oblíbené knihy", want: "Chci si přečíst" }[state.view] || "Můj seznam knih";
+      $("gridHint").innerHTML = `<div class="hint list-share"><span>Pošli tenhle seznam komukoli – odkaz se otevře v každém prohlížeči, i v mobilu.</span><button class="btn ghost" id="shareListBtn" style="min-height:38px;padding:6px 14px">📤 Sdílet seznam</button></div>`;
+      $("shareListBtn").onclick = () => shareList(listName, books);
+    }
     if (!books.length) {
       const msg = state.view === "rated" ? "Zatím jsi nic nehodnotil/a. Otevři knihu, kterou jsi přečetl/a, a dej jí hvězdičky ⭐." : LISTS[state.view].empty;
       grid.innerHTML = `<div class="empty"><b>${state.view === "rated" ? "⭐" : LISTS[state.view].icon}</b>${msg}</div>`;
@@ -48,8 +55,8 @@ function render() {
 }
 
 function coverHtml(book, size = "M") {
-  if (book.cover) return `<img loading="lazy" alt="Obálka: ${esc(book.title)}" src="https://covers.openlibrary.org/b/id/${book.cover}-${size}.jpg">`;
-  if (book.coverUrl) return `<img loading="lazy" alt="Obálka: ${esc(book.title)}" src="${esc(book.coverUrl)}" data-t="${esc(book.title)}" data-a="${esc(book.author || "")}" onload="fixCover(this)" onerror="fixCover(this, true)">`;
+  if (book.cover) return `<img loading="lazy" alt="" src="https://covers.openlibrary.org/b/id/${book.cover}-${size}.jpg">`;
+  if (book.coverUrl) return `<img loading="lazy" alt="" src="${esc(book.coverUrl)}" data-t="${esc(book.title)}" data-a="${esc(book.author || "")}" onload="fixCover(this)" onerror="fixCover(this, true)">`;
   return placeholderHtml(book.title, book.author);
 }
 

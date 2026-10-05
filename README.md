@@ -48,6 +48,7 @@ Aplikace nepotřebuje žádné sestavování, prohlížeč načítá soubory př
 | `js/extras.js` | Překvap mě, narozeniny spisovatelů |
 | `js/diary.js` | deník, záloha, sdílení, sledování, Pro tebe, uvítání, O aplikaci |
 | `js/omni.js` | našeptávač podle názvu, překlad popisů |
+| `js/social.js` | žebříčky, sdílené seznamy, odznaky |
 | `js/main.js` | adresy stránek (trasy) a spuštění |
 
 Soubory se načítají v tomto pořadí a sdílejí společné proměnné.
@@ -55,15 +56,15 @@ Soubory se načítají v tomto pořadí a sdílejí společné proměnné.
 ## Testy
 
 ```
-node --test tests/pure.test.mjs
+node --test tests/pure.test.mjs tests/contrast.test.mjs tests/share.test.mjs
 ```
 
-Testy pokrývají funkce z `js/pure.js`: rozbor věty v hledání vlastními slovy, spojování stejných knih z více zdrojů, rozpoznání dílu série, filtr délky a nastavení žánrů.
+`contrast.test.mjs` hlídá, aby texty a tlačítka ve všech barevných tématech měly dostatečný kontrast (WCAG). Testy dál pokrývají funkce z `js/pure.js`: rozbor věty v hledání vlastními slovy, spojování stejných knih z více zdrojů, rozpoznání dílu série, filtr délky a nastavení žánrů.
 
 ## Vydání nové verze
 
 ```
-node --test tests/pure.test.mjs
+node --test tests/pure.test.mjs tests/contrast.test.mjs tests/share.test.mjs
 node tools/stamp.mjs
 git add -A
 git commit -m "popis změny"

@@ -82,11 +82,11 @@ async function resolvePart(x, author) {
 }
 
 const WD_TYPES = "wd:Q7725634 wd:Q8261 wd:Q47461344 wd:Q1667921 wd:Q571";
-const sparql = async (query) => (await (await fetch("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(query))).json()).results.bindings;
+const sparql = async (query) => (await cachedJson("https://query.wikidata.org/sparql?format=json&query=" + encodeURIComponent(query), 24 * 7)).results.bindings;
 async function wdSearch(text, lang) {
   if (!text) return [];
   const u = `https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&origin=*&type=item&limit=5&language=${lang}&search=${encodeURIComponent(text)}`;
-  return ((await (await fetch(u)).json()).search || []).map((x) => x.id);
+  return ((await cachedJson(u, 24 * 7)).search || []).map((x) => x.id);
 }
 async function seriesFromWikidata(book) {
   const ids = [...new Set([...(await wdSearch(book.original, "en")), ...(await wdSearch(book.title, "cs"))])];
@@ -217,6 +217,7 @@ async function openSeries(id) {
     const k = partKey(data.parts[b.dataset.read]);
     readParts.has(k) ? readParts.delete(k) : readParts.add(k);
     store.set("prectene-dily", [...readParts]);
+    checkBadges();
     updateSeriesProgress(data);
   }));
   updateSeriesProgress(data);

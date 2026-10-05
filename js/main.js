@@ -8,6 +8,9 @@ function gbDesc(vol) {
 }
 
 function route() {
+  const shared = location.hash.match(/^#seznam\/([\w-]+)$/);
+  if (shared) return openSharedList(shared[1]);
+  closeListPage();
   const about = location.hash.match(/^#(o-aplikaci|napis-nam)$/);
   if (about) return openAbout(about[1] === "napis-nam");
   closeAbout();
@@ -45,7 +48,7 @@ $("more").onclick = () => { state.page++; search({ append: true }); };
 // další knihy se načtou samy, když se tlačítko „Načíst další“ blíží k okraji obrazovky
 function autoMore() {
   const more = $("more");
-  if (more.hidden || state.view !== "results" || $("status").textContent.startsWith("Hled") || !$("book").hidden || !$("seriesPage").hidden || !$("about").hidden) return;
+  if (more.hidden || state.view !== "results" || $("status").textContent.startsWith("Hled") || !$("book").hidden || !$("seriesPage").hidden || !$("about").hidden || !$("listPage").hidden) return;
   if (more.getBoundingClientRect().top < innerHeight + 600) more.click();
 }
 let autoMoreTimer = null;
@@ -57,6 +60,7 @@ document.addEventListener("keydown", (e) => {
   if (!$("book").hidden) $("back").click();
   else if (!$("seriesPage").hidden) $("sBack")?.click();
   else if (!$("about").hidden) $("aBack")?.click();
+  else if (!$("listPage").hidden) $("lBack")?.click();
 });
 $("footAbout").onclick = $("footFb").onclick = () => { state.fromApp = true; };
 $("footBackup").onclick = goToBackup;

@@ -5,19 +5,19 @@
 }
 [data-theme="mata"] {
   --bg: #f1faf6; --paper: #ffffff; --ink: #11302a; --muted: #5a776f; --line: #dcefe7;
-  --a1: #0e9f7e; --a2: #2dc6d4; --soft: #daf5ec; --on-accent: #fff;
+  --a1: #0e9f7e; --a2: #23a0ab; --soft: #daf5ec; --on-accent: #fff;
 }
 [data-theme="koral"] {
   --bg: #fff6f1; --paper: #ffffff; --ink: #34160f; --muted: #86645a; --line: #f5e2d9;
-  --a1: #f2545b; --a2: #ff9e3d; --soft: #ffe6dc; --on-accent: #fff;
+  --a1: #f2545b; --a2: #e07000; --soft: #ffe6dc; --on-accent: #fff;
 }
 [data-theme="ocean"] {
   --bg: #f0f5fd; --paper: #ffffff; --ink: #0f213d; --muted: #5a6b85; --line: #dde7f5;
-  --a1: #1f63e8; --a2: #1fb5e0; --soft: #dfeafc; --on-accent: #fff;
+  --a1: #1f63e8; --a2: #1b9cc1; --soft: #dfeafc; --on-accent: #fff;
 }
 [data-theme="noc"] {
   --bg: #0e0f1f; --paper: #181a2f; --ink: #eceaff; --muted: #9c9bc0; --line: #2a2c48;
-  --a1: #8b7bff; --a2: #f062b0; --soft: #262448; --on-accent: #fff;
+  --a1: #8b7bff; --a2: #ef59ab; --soft: #262448; --on-accent: #fff;
 }
 [data-theme="les"] {
   --bg: #0f1a16; --paper: #16241f; --ink: #e5f3ec; --muted: #93b3a5; --line: #243a32;
@@ -469,3 +469,43 @@ textarea { min-height: 90px; resize: vertical; }
   .book-main .cover { width: 60%; }
   .links a { flex: 1 1 calc(50% - 10px); text-align: center; }
 }
+
+/* ===== Přístupnost ===== */
+/* zřetelné zvýraznění prvku při ovládání klávesnicí */
+:is(button, a, select, input, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--a1);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.card:focus-visible { outline: none; }
+.chip:focus-visible, .tab:focus-visible, .dot:focus-visible { outline-offset: 3px; }
+/* odkaz pro přeskočení na výsledky – ukáže se jen při ovládání klávesnicí */
+.skip {
+  position: absolute; left: 12px; top: -60px; z-index: 100; background: var(--ink); color: var(--bg);
+  padding: 10px 16px; border-radius: 10px; font-weight: 700; text-decoration: none; transition: top .15s;
+}
+.skip:focus { top: 12px; }
+/* omezení pohybu podle nastavení systému */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* ===== Žebříčky a odznaky ===== */
+.rankb {
+  position: absolute; left: 8px; top: 8px; min-width: 34px; height: 34px; padding: 0 8px; border-radius: 999px;
+  display: grid; place-items: center; background: var(--grad); color: var(--on-accent); font-weight: 800; font-size: .9rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+.cover:has(.rankb) .ebadge { top: 48px; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.badge { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; gap: 4px; align-content: start; text-align: center; justify-items: center; }
+.badge .bicon { font-size: 2rem; filter: grayscale(1); opacity: .45; }
+.badge.have { border-color: var(--a1); background: var(--soft); }
+.badge.have .bicon { filter: none; opacity: 1; }
+.badge b { font-size: .92rem; }
+.badge small { color: var(--muted); font-size: .76rem; line-height: 1.3; }
+.badge .bdate { color: var(--ink); font-weight: 600; }
+.bprog { display: block; width: 100%; height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.bprog i { display: block; height: 100%; background: var(--grad); }
+.list-share { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 560px) { .badges { grid-template-columns: 1fr 1fr; gap: 8px; } .badge { padding: 10px 8px; } .badge .bicon { font-size: 1.6rem; } }

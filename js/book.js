@@ -223,6 +223,7 @@ function setupMyRating(book) {
     if (!stars) { $("bSaved").textContent = "Vyber počet hvězdiček."; return; }
     myRatings[book.key] = { stars, text: $("bText").value.trim(), date: Date.now(), book: slim(book) };
     store.set("moje-hodnoceni", myRatings);
+    checkBadges();
     $("bSaved").textContent = "✓ Uloženo";
     $("bDel").hidden = false;
     renderTabs();
@@ -290,7 +291,7 @@ async function loadDescription(book, vol, rec) {
       raw = kcDesc(rec);
       tags = info.kcSubjects = kcSubjects(rec);
     } else {
-      const work = await (await fetch(`${API}${book.key}.json`)).json();
+      const work = await cachedJson(`${API}${book.key}.json`, 24);
       raw = realDesc(work);
       tags = info.subjects = work.subjects || [];
       // český popis (z českých knihoven nebo z Google Books) má přednost před anglickým z Open Library
@@ -422,7 +423,7 @@ async function bookInfo(book) {
       return { cats: [...new Set((v.volumeInfo?.categories || []).map((c) => c.split(" / ").pop()))] };
     }
     if (book.key.startsWith("kc:")) return { kcSubjects: kcSubjects((await (await fetch(kcRecordUrl(book.kcId))).json()).records?.[0]) };
-    return { subjects: (await (await fetch(`${API}${book.key}.json`)).json()).subjects || [] };
+    return { subjects: (await cachedJson(`${API}${book.key}.json`, 24)).subjects || [] };
   } catch { return {}; }
 }
 
