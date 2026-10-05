@@ -16,7 +16,7 @@ vm.runInContext(read("js/config.js") + "\n" + read("js/pure.js"), ctx);
 const app = vm.runInContext(
   `({ plural, initials, esc, cleanDesc, realDesc, normKey, parseSeries, parseMood, moodQuery, olGenreQuery,
       kcAuthor, kcDesc, kcSubjects, sameAuthor, bookHash, plain, isoDate, fitsLength, seriesOrder,
-      GENRES, OL_SUBJECT, GB_GENRES, KC_GENRES, MOODS, LENGTHS, PERIODS })`, ctx);
+      allocate, GENRES, OL_SUBJECT, GB_GENRES, KC_GENRES, MOODS, TOPICS, LENGTHS, PERIODS })`, ctx);
 // objekty z jiného kontextu porovnáváme přes JSON
 const plainObj = (x) => JSON.parse(JSON.stringify(x));
 
@@ -99,6 +99,85 @@ test("parseMood: novinky, jazyk a dlouhé knihy", () => {
   assert.equal(m.period, "new");
   assert.equal(m.lang, "cze");
   assert.deepEqual(plainObj(app.parseMood("něco dlouhého a epického")).pages, [500, "*"]);
+});
+
+test("parseMood: „právě vyšlo“ a „čerstvé“ chtějí úplné novinky", () => {
+  for (const t of ["něco napínavého, co právě vyšlo", "čerstvá romantasy", "nejnovější detektivka"]) {
+    const m = plainObj(app.parseMood(t));
+    assert.equal(m.fresh, true, t);
+    assert.equal(m.period, "new", t);
+    assert.equal(m.rest, "", t + " – slova o novosti se nemají hledat jako text");
+  }
+  const m = plainObj(app.parseMood("detektivka, novinky"));
+  assert.equal(m.fresh, false);
+  assert.equal(m.period, "new");
+  assert.equal(plainObj(app.parseMood("něco napínavého")).fresh, false);
+});
+
+test("parseMood: motivy se hledají spolu se žánrem", () => {
+  const m = plainObj(app.parseMood("romantika s upíry"));
+  assert.deepEqual(m.include, ["romance"]);
+  assert.deepEqual(m.topics.map((x) => x.ol), ["vampires"]);
+  assert.equal(app.moodQuery(app.parseMood("romantika s upíry")), "subject:(romance) subject:(vampires)");
+  assert.deepEqual(plainObj(app.parseMood("detektivka z Prahy")).topics.map((x) => x.kc), ["Praha"]);
+  const w = plainObj(app.parseMood("kniha o druhé světové válce"));
+  assert.deepEqual(w.include, ["war_stories"]);
+  assert.deepEqual(w.topics.map((x) => x.label), ["2. světová válka"]);
+  assert.equal(w.rest, "");
+});
+
+test("parseMood: slovo, které určilo žánr, není zároveň motiv", () => {
+  const m = plainObj(app.parseMood("fantasy s draky pro mládež"));
+  assert.deepEqual(m.include, ["fantasy", "young_adult_fiction"]);
+  assert.deepEqual(m.topics.map((x) => x.ol), ["dragons"]);
+  assert.deepEqual(plainObj(app.parseMood("o drakech")).topics, [], "„drakech“ už vzal žánr fantasy");
+});
+
+test("parseMood: „něco jako …“ hledá podobné knihy", () => {
+  const m = plainObj(app.parseMood("něco jako Harry Potter, ale pro dospělé"));
+  assert.equal(m.like, "Harry Potter");
+  assert.deepEqual(m.exclude, ["juvenile_fiction"], "pro dospělé = bez knih pro děti");
+  assert.equal(m.rest, "");
+  assert.equal(plainObj(app.parseMood("podobné jako hobit")).like, "hobit");
+  assert.equal(plainObj(app.parseMood("něco ve stylu Agathy Christie")).like, "Agathy Christie");
+  const z = plainObj(app.parseMood("něco jako Zaklínač ale ne horor"));
+  assert.equal(z.like, "Zaklínač");
+  assert.deepEqual(z.exclude, ["horror"]);
+});
+
+test("parseMood: samotné „jako“ před obyčejným slovem není název knihy", () => {
+  assert.equal(plainObj(app.parseMood("vtipná kniha jako dárek")).like, null);
+  assert.deepEqual(plainObj(app.parseMood("vtipná kniha jako dárek")).include, ["humor"]);
+});
+
+test("parseMood: zápor u délky", () => {
+  assert.deepEqual(plainObj(app.parseMood("psychologický thriller, ne moc dlouhý")).pages, [0, 350]);
+  assert.deepEqual(plainObj(app.parseMood("psychologický thriller, ne moc dlouhý")).include, ["psychological_thrillers"]);
+  assert.deepEqual(plainObj(app.parseMood("krátká romantika")).pages, [0, 250]);
+  assert.deepEqual(plainObj(app.parseMood("dlouhá fantasy")).pages, [500, "*"]);
+});
+
+test("parseMood: nálady a další výrazy", () => {
+  assert.deepEqual(plainObj(app.parseMood("oddechové čtení na dovolenou")).include, ["humor"]);
+  assert.deepEqual(plainObj(app.parseMood("něco inspirativního")).include, ["self_help"]);
+  assert.deepEqual(plainObj(app.parseMood("pořádná záhada")).include, ["detective_and_mystery_stories"]);
+  assert.deepEqual(plainObj(app.parseMood("povídky o lásce")).topics.map((x) => x.ol), ["short stories"]);
+});
+
+test("allocate: oblíbenější žánr dostane víc míst, každý aspoň jedno", () => {
+  const a = plainObj(app.allocate({ fantasy: 3, romance: 1, horror: 0.5 }, 18));
+  assert.equal(Object.values(a).reduce((x, y) => x + y, 0), 18);
+  assert.ok(a.fantasy > a.romance && a.romance >= a.horror && a.horror >= 1, JSON.stringify(a));
+  const b = plainObj(app.allocate({ a: 2, b: 2, c: 2, d: 2 }, 3));
+  assert.equal(Object.values(b).reduce((x, y) => x + y, 0), 3, "víc žánrů než míst");
+  assert.deepEqual(plainObj(app.allocate({}, 10)), {});
+});
+
+test("nastavení: motivy mají téma pro oba zdroje", () => {
+  for (const [re, ol, kc, label] of app.TOPICS) {
+    assert.ok(typeof re.test === "function" && ol && kc && label, label);
+    assert.ok(!/[()]/.test(kc), `téma „${kc}“ pro katalog knihoven nesmí obsahovat závorky`);
+  }
 });
 
 test("parseMood: neznámá slova zůstanou jako text k hledání", () => {

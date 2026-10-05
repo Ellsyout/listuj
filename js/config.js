@@ -114,7 +114,7 @@ const GB_GENRES = {
   self_help: ["seberozvoj", /self-help|psychology/i],
 };
 const LIMIT = 24;
-const FIELDS = "key,title,author_name,author_key,first_publish_year,cover_i,ratings_average,ratings_count,edition_count,number_of_pages_median,ebook_access,ia,editions,editions.title,editions.key,editions.cover_i";
+const FIELDS = "key,title,author_name,author_key,first_publish_year,cover_i,ratings_average,ratings_count,edition_count,number_of_pages_median,ebook_access,ia,editions,editions.title,editions.key,editions.cover_i,editions.language";
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -143,6 +143,10 @@ const KC_GENRES = {
 // ---- Hledání vlastními slovy: česká slova → žánry (porovnává se bez diakritiky) ----
 const MOODS = [
   [/romantasy/, "romantasy", "romantasy"],
+  [/psychologick\w* (thriller|trhak)/, "psychological_thrillers", "psychologický thriller"],
+  [/new adult/, "new_adult", "new adult"],
+  [/pro zeny|zensk\w* roman|cervena knihovna/, "women", "romány pro ženy"],
+  [/inspirativ|motivac|motivuj|osobni rozvoj|seberozvoj/, "self_help", "seberozvoj"],
   [/dark romance|temn\w* romant/, "dark_romance", "dark romance"],
   [/pohodov\w* detektiv|cozy/, "cozy_mystery", "pohodová detektivka"],
   [/manga|anime/, "manga", "manga"],
@@ -151,27 +155,60 @@ const MOODS = [
   [/sportovn\w* romant|hokejist|fotbalist/, "sports_romance", "sportovní romance"],
   [/rodinn\w* sag/, "family_saga", "rodinná sága"],
   [/napinav|napet|adrenalin|thriller/, "thrillers", "napínavé"],
-  [/detektiv|krimi|vrazd|vysetrov|zlocin/, "detective_and_mystery_stories", "detektivka"],
+  [/detektiv|krimi|vrazd|vysetrov|zlocin|zahad|mysteri/, "detective_and_mystery_stories", "detektivka"],
   [/horor|strasideln|desiv|hruz/, "horror", "horor"],
   [/fantasy|magi|kouzl|drak|carodej|elf/, "fantasy", "fantasy"],
   [/sci-?fi|vesmir|budoucnost|robot|mimozemst|planet/, "science_fiction", "sci-fi"],
   [/romant|lask[auyo]|lasce|zamilov/, "romance", "romantika"],
-  [/vtip|humor|sranda|smes|pobav|zabavn/, "humor", "humor"],
+  [/vtip|humor|sranda|smes|pobav|zabavn|komedi|oddechov|odpocink|lehk\w* (cten|knih)|na dovolenou|na plaz/, "humor", "oddechové a vtipné"],
   [/histor|stredovek|minulost/, "historical_fiction", "historické"],
   [/dobrodruz|cestovan|vyprav/, "adventure_stories", "dobrodružné"],
-  [/valk|valecn|vojak/, "war_stories", "válečné"],
+  [/valk|valce|valecn|vojak/, "war_stories", "válečné"],
   [/klasik|klasick/, "classic_literature", "klasika"],
   [/pohad/, "fairy_tales", "pohádky"],
   [/pro deti|detsk|pro dite|pro syna|pro dceru/, "juvenile_fiction", "pro děti"],
   [/mladez|teenager|dospivaj|young adult|nactilet/, "young_adult_fiction", "pro mládež"],
   [/basn|poezi|verse/, "poetry", "poezie"],
   [/zivotopis|biografi|skutecn/, "biography", "podle skutečnosti"],
-  [/psycholog|dusevn|seberozvoj/, "psychology", "psychologie"],
+  [/psycholog|dusevn/, "psychology", "psychologie"],
   [/filozof|smysl zivota/, "philosophy", "filozofie"],
   [/dystopi|postapo|konec sveta/, "dystopias", "dystopie"],
   [/dojem|smutn|plakat|slzy|tragick/, "grief", "dojemné"],
 ];
+// Motivy a témata – hledají se navíc k žánru (všechny musí sedět): [výraz, téma v Open Library, téma v katalogu knihoven, popisek]
+const TOPICS = [
+  [/upir|vampyr/, "vampires", "upíři", "upíři"],
+  [/vlkodla/, "werewolves", "vlkodlaci", "vlkodlaci"],
+  [/drak|draci|draku/, "dragons", "draci", "draci"],
+  [/carodejnic/, "witches", "čarodějnice", "čarodějnice"],
+  [/\sduch|strasidl|duchove/, "ghosts", "duchové", "duchové"],
+  [/zombi/, "zombies", "zombie", "zombie"],
+  [/cestovan\w* casem|stroj\w* cas/, "time travel", "cestování časem", "cestování časem"],
+  [/umel\w* inteligenc|robot/, "robots", "roboti", "roboti a umělá inteligence"],
+  [/vesmir|kosmos|kosmick/, "outer space", "vesmír", "vesmír"],
+  [/pirat/, "pirates", "piráti", "piráti"],
+  [/spion|tajn\w* agent/, "spies", "špioni", "špioni"],
+  [/mafi/, "mafia", "mafie", "mafie"],
+  [/skol|internat|akademi/, "schools", "školy", "škola"],
+  [/pratelst|kamarad/, "friendship", "přátelství", "přátelství"],
+  [/rodin|sourozen/, "families", "rodina", "rodina"],
+  [/zvir|pejsk|psick|\spes\s|kock|konic|\skone\s|\skun\s/, "animals", "zvířata", "zvířata"],
+  [/sport|fotbal|hokej/, "sports", "sport", "sport"],
+  [/hudb|muzik|kapel/, "music", "hudba", "hudba"],
+  [/vareni|kuchar|jidl|pekar|cukrar/, "cooking", "vaření", "jídlo a vaření"],
+  [/druh\w* svetov|holocaust|holokaust/, "world war, 1939-1945", "druhá světová válka", "2. světová válka"],
+  [/prv\w* svetov/, "world war, 1914-1918", "první světová válka", "1. světová válka"],
+  [/stredovek/, "middle ages", "středověk", "středověk"],
+  [/praze|praha|prahy|prazsk/, "prague (czech republic)", "Praha", "Praha"],
+  [/japon/, "japan", "Japonsko", "Japonsko"],
+  [/povidk/, "short stories", "povídky", "povídky"],
+];
 const MOOD_EXAMPLES = [
+  "něco napínavého, co právě vyšlo",
+  "něco jako Harry Potter",
+  "romantika s upíry",
+  "detektivka z Prahy",
+  "čerstvá romantasy",
   "něco napínavého, ale ne horor",
   "vtipná kniha na dovolenou",
   "krátká romantika",

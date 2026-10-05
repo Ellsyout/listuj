@@ -6,7 +6,7 @@ async function openBook(id, src = "ol") {
   let book = cache.get(key) || Object.values(lists).flat().find((b) => b.key === key) || myRatings[key]?.book;
   let vol = null, rec = null; // podrobnosti z Google Books / z knihoven
   if (isGB) {
-    try { vol = await (await fetch(`${GB_API}/${id}?key=${GOOGLE_BOOKS_KEY}`)).json(); if (!vol.volumeInfo) vol = null; } catch {}
+    try { vol = await (await gbFetch(`${GB_API}/${id}?key=${GOOGLE_BOOKS_KEY}`)).json(); if (!vol.volumeInfo) vol = null; } catch {}
     if (!book && vol) book = toGBook(vol);
   } else if (isKC) {
     try { rec = (await (await fetch(kcRecordUrl(id))).json()).records?.[0] || null; } catch {}
@@ -303,7 +303,7 @@ async function loadDescription(book, vol, rec) {
       }
       if (!czech && book.gbId && GOOGLE_BOOKS_KEY) {
         try {
-          const v = await (await fetch(`${GB_API}/${book.gbId}?key=${GOOGLE_BOOKS_KEY}`)).json();
+          const v = await (await gbFetch(`${GB_API}/${book.gbId}?key=${GOOGLE_BOOKS_KEY}`)).json();
           const g = gbDesc(v);
           if (g && (v.volumeInfo.language === "cs" || !raw)) raw = g;
         } catch {}
@@ -359,7 +359,7 @@ async function loadMoreByAuthorGB(book) {
   const lang = GB_LANG[$("lang").value];
   if (lang) p.set("langRestrict", lang);
   try {
-    const items = (await (await fetch(`${GB_API}?${p}`)).json()).items || [];
+    const items = (await (await gbFetch(`${GB_API}?${p}`)).json()).items || [];
     const seen = new Set([normKey(book.title, book.author)]);
     const books = items.filter((it) => it.volumeInfo.title && it.volumeInfo.authors).map(toGBook).filter((b) => {
       const k = normKey(b.title, b.author);
@@ -418,12 +418,23 @@ async function loadSimilar(book, info = {}) {
 async function bookInfo(book) {
   try {
     if (book.key.startsWith("gb:")) {
-      const v = await (await fetch(`${GB_API}/${book.gbId}?key=${GOOGLE_BOOKS_KEY}`)).json();
+      const v = await (await gbFetch(`${GB_API}/${book.gbId}?key=${GOOGLE_BOOKS_KEY}`)).json();
       return { cats: [...new Set((v.volumeInfo?.categories || []).map((c) => c.split(" / ").pop()))] };
     }
     if (book.key.startsWith("kc:")) return { kcSubjects: kcSubjects((await (await fetch(kcRecordUrl(book.kcId))).json()).records?.[0]) };
     return { subjects: (await (await fetch(`${API}${book.key}.json`)).json()).subjects || [] };
   } catch { return {}; }
+}
+
+// jak moc téma vypovídá o druhu knihy: žánry a typické motivy nahoru, obecná a cizojazyčná slova dolů
+const GENRE_WORDS = /fantasy|science fiction|mystery|detective|thriller|suspense|romance|love stories|horror|historical|adventure|humor|humorous|dystopi|magic|wizard|witch|dragon|vampire|school|friendship|spies|crime|war stories|fairy tales|space|time travel/i;
+function subjectScore(x) {
+  let s = 0;
+  if (GENRE_WORDS.test(x)) s += 3;
+  if (/ in fiction$|fiction$/i.test(x)) s += 1;
+  if (/^[A-ZÁ-Ž\s]+$/.test(x)) s -= 2;          // „MAGIA“, „NOVELAS INGLESAS“ – cizojazyčné katalogové štítky
+  if (/juvenile|children|bestseller|award|staff picks|accessible/i.test(x)) s -= 3;
+  return s;
 }
 
 async function similarFromInfo(book, info = {}) {
@@ -433,7 +444,9 @@ async function similarFromInfo(book, info = {}) {
   let books = [];
   try {
     if (info.subjects?.length) {
-      const subs = info.subjects.filter((x) => !GENERIC_SUBJECT.test(x) && !/[:(]/.test(x) && x.length < 40).slice(0, 3);
+      // žánrová témata (fantasy, kouzla, škola…) mají přednost před nahodilými („Duchové“, „Bystrost“)
+      const subs = info.subjects.filter((x) => !GENERIC_SUBJECT.test(x) && !/[:(]/.test(x) && x.length < 40)
+        .map((x, i) => ({ x, i, score: subjectScore(x) })).sort((a, b) => b.score - a.score || a.i - b.i).map((o) => o.x).slice(0, 3);
       for (let n = subs.length; n >= 1 && books.length < 4; n--) {  // čím víc společných témat, tím podobnější
         const p = new URLSearchParams({ q: subs.slice(0, n).map((x) => `subject:"${x}"`).join(" "), limit: 20, sort: "readinglog", fields: FIELDS });
         if (lang) p.set("language", lang);
@@ -444,15 +457,18 @@ async function similarFromInfo(book, info = {}) {
       const national = /^\S+(ské|cké)\s+(romány|prózy|povídky|poezie)$/i;
       const subjects = info.kcSubjects.filter((x) => !GENERIC_KC.test(x) && !x.includes("("))
         .sort((a, b) => national.test(a) - national.test(b));
+      const seedKind = plain(info.kcSubjects.join(" "));
+      const offKind = (b) => /komiks|manga|pro deti|detsk|pro mladez|leporel|omalovan/.test(b.tagsText || "") && !/komiks|manga|pro deti|detsk|pro mladez/.test(seedKind);
       for (const subject of subjects.slice(0, 3)) {
-        books = (await kcSearch(subject, "Subject", 30)).filter(other);
+        // řazení podle toho, v kolika knihovnách kniha je = známější knihy napřed
+        books = (await kcSearch(subject, "Subject", 50, "")).filter((b) => other(b) && !offKind(b)).sort((a, b) => (b.libs || 0) - (a.libs || 0));
         if (books.length >= 4) break;
       }
     } else if (info.cats?.length && GOOGLE_BOOKS_KEY) {
       const p = new URLSearchParams({ q: `subject:"${info.cats[0]}"`, maxResults: 20, printType: "books", key: GOOGLE_BOOKS_KEY });
       const gl = GB_LANG[lang];
       if (gl) p.set("langRestrict", gl);
-      const items = (await (await fetch(`${GB_API}?${p}`)).json()).items || [];
+      const items = (await (await gbFetch(`${GB_API}?${p}`)).json()).items || [];
       books = items.filter((it) => it.volumeInfo.title && it.volumeInfo.authors && (!gl || it.volumeInfo.language === gl)).map(toGBook).filter(other);
     }
   } catch {}

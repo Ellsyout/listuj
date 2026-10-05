@@ -19,7 +19,7 @@ async function omniSuggest(text) {
     KC_LANG[lang] || !lang ? kcSearch(text, "Title", 10, "") : Promise.resolve([]), // podle shody s názvem, ne podle data
     fetch(`${API}/search/authors.json?q=${encodeURIComponent(text)}&limit=5`, { signal }).then((r) => r.json()),
     // Google Books zná dobře české názvy („Hra o trůny“), které Open Library nemá
-    GOOGLE_BOOKS_KEY ? fetch(`${GB_API}?${new URLSearchParams({ q: `intitle:${text}`, maxResults: 10, printType: "books", key: GOOGLE_BOOKS_KEY, ...(gbLang ? { langRestrict: gbLang } : {}) })}`, { signal })
+    GOOGLE_BOOKS_KEY ? gbFetch(`${GB_API}?${new URLSearchParams({ q: `intitle:${text}`, maxResults: 10, printType: "books", key: GOOGLE_BOOKS_KEY, ...(gbLang ? { langRestrict: gbLang } : {}) })}`, { signal })
       .then((r) => r.json()).then((d) => (d.items || []).filter((it) => it.volumeInfo.title && it.volumeInfo.authors && (!gbLang || it.volumeInfo.language === gbLang)).map(toGBook))
       : Promise.resolve([]),
   ]);

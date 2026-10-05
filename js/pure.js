@@ -42,8 +42,13 @@ function parseSeries(title) {
 }
 
 function parseMood(text) {
-  const t = " " + plain(text) + " ";
-  const m = { include: [], exclude: [], labels: [], pages: null, period: null, lang: null, rest: "" };
+  const m = { include: [], exclude: [], topics: [], labels: [], pages: null, period: null, lang: null, rest: "", like: null };
+  // „něco jako Harry Potter“, „podobné jako Hobit“, „ve stylu Agathy Christie“ → podobné knihy
+  const like = String(text).match(/(?:^|[\s,])(?:něco\s+)?(?:podobn\S*\s+(?:jako\s+)?|stejn\S*\s+jako\s+|ve\s+stylu\s+|na\s+způsob\s+|jako\s+(?:je\s+)?)[„"'“]?([^,.;!?„"'“”]{3,}?)[”"'“]?(?=\s*$|\s*[,.;!?]|\s+(?:ale|jen|jenom|akorát)\s)/i);
+  // samotné „jako“ bereme jen před názvem s velkým písmenem („kniha jako dárek“ není kniha „dárek“)
+  const isLike = like && (/podobn|ve\s+stylu|na\s+způsob|něco\s+jako|stejn/i.test(like[0]) || /^\p{Lu}/u.test(like[1]));
+  if (isLike) { m.like = like[1].trim(); m.labels.push({ label: `podobné jako „${m.like}“`, neg: false }); }
+  const t = " " + plain(isLike ? String(text).replace(like[0], " ") : text) + " ";
   let left = t;
   for (const [re, subject, label] of MOODS) {
     const hit = left.match(re);
@@ -55,12 +60,26 @@ function parseMood(text) {
     if (!list.includes(subject)) { list.push(subject); m.labels.push({ label, neg }); }
     left = left.replace(new RegExp("\\S*" + hit[0] + "\\S*"), " ");
   }
-  if (/kratk|kratsi|na jeden vecer|jednohubk/.test(t)) { m.pages = [0, 250]; m.labels.push({ label: "krátká (do 250 stran)" }); }
+  // motivy hledáme jen ve zbytku věty (slovo, které už určilo žánr, se nepočítá dvakrát)
+  for (const [re, ol, kc, label] of TOPICS) {
+    const hit = left.match(re);
+    if (!hit) continue;
+    if (!m.topics.some((x) => x.ol === ol)) { m.topics.push({ ol, kc, label }); m.labels.push({ label: "📌 " + label, neg: false }); }
+    left = left.replace(new RegExp("\\S*" + hit[0].trim() + "\\S*"), " ");
+  }
+  // „ne moc dlouhá“ = spíš kratší; „ne krátká“ = spíš delší
+  if (/\sne\s+(moc\s+|prilis\s+|tak\s+)?dlouh/.test(t)) { m.pages = [0, 350]; m.labels.push({ label: "ne moc dlouhá (do 350 stran)" }); }
+  else if (/\sne\s+(moc\s+|prilis\s+)?kratk/.test(t)) { m.pages = [300, "*"]; m.labels.push({ label: "delší (přes 300 stran)" }); }
+  else if (/kratk|kratsi|na jeden vecer|jednohubk/.test(t)) { m.pages = [0, 250]; m.labels.push({ label: "krátká (do 250 stran)" }); }
   else if (/dlouh|tlust|obsahl|epick/.test(t)) { m.pages = [500, "*"]; m.labels.push({ label: "dlouhá (přes 500 stran)" }); }
-  if (/(^|\s)(novink|nov[aeyou]\s|nejnovejs|letosn|cerstv|soucasn)/.test(t)) { m.period = "new"; m.labels.push({ label: "novinky" }); }
+  // „právě vyšlo“, „čerstvé“, „nejnovější“ = chce úplné novinky (řadit od nejnovějších)
+  m.fresh = /(prave|nove|nedavno) vysl|cerstv|nejnovejs|letosn|cerst/.test(t);
+  if (m.fresh || /(^|\s)(novink|nov[aeyou]\s|soucasn)/.test(t)) { m.period = "new"; m.labels.push({ label: m.fresh ? "úplné novinky" : "novinky" }); }
+  // „pro dospělé“ = žádné knihy pro děti
+  if (/pro dospel/.test(t) && !m.exclude.includes("juvenile_fiction")) { m.exclude.push("juvenile_fiction"); m.labels.push({ label: "pro děti", neg: true }); }
   if (/cesk|v cestine/.test(t)) { m.lang = "cze"; m.labels.push({ label: "v češtině" }); }
   else if (/anglick|v anglictine/.test(t)) { m.lang = "eng"; m.labels.push({ label: "v angličtině" }); }
-  const STOP = /^(neco|nejak\w*|kniha|knihu|knihy|chci|chtel\w*|bych|mam|chut|na|ale|a|s|se|pro|od|do|ktery|ktera|ktere|precist|cist|dobr\w*|hezk\w*|nic|moc|hodne|trochu|nebo|kratk\w*|dlouh\w*|nov\w*|novink\w*|ceske|cesk\w*|pribeh|roman)$/;
+  const STOP = /^(neco|nejak\w*|kniha|knihu|knihy|chci|chtel\w*|bych|mam|chut|na|ale|a|s|se|pro|od|do|ktery|ktera|ktere|precist|cist|dobr\w*|hezk\w*|nic|moc|hodne|trochu|nebo|kratk\w*|dlouh\w*|nov\w*|novink\w*|ceske|cesk\w*|pribeh\w*|roman\w*|prave|vysl\w*|cerstv\w*|nejnovejs\w*|letosn\w*|nedavno|nalad\w*|takov\w*|nejak\w*|kde|jsou|ktery\w*|kterem|ktere\w*|plne|plny|treba|mozna|cteni|dovolen\w*|plaz\w*|dospel\w*|darek|dar)$/;
   m.rest = left.split(/[\s,.;!?]+/).filter((w) => w.length > 2 && !STOP.test(w)).join(" ");
   return m;
 }
@@ -68,8 +87,9 @@ function parseMood(text) {
 function moodQuery(m) {
   const parts = m.include.filter(olSubject).map((s) => `subject:(${olSubject(s)})`)
     .concat(m.exclude.filter(olSubject).map((s) => `-subject:(${olSubject(s)})`));
+  parts.push(...(m.topics || []).map((x) => `subject:(${x.ol})`));
   if (m.pages) parts.push(`number_of_pages_median:[${m.pages[0]} TO ${m.pages[1]}]`);
-  if (!m.include.length) parts.unshift(m.rest || "subject:fiction"); // samotné „ne …“ potřebuje něco kladného
+  if (!m.include.length && !(m.topics || []).length) parts.unshift(m.rest || "subject:fiction"); // samotné „ne …“ potřebuje něco kladného
   return parts.join(" ");
 }
 
@@ -119,3 +139,18 @@ const seriesOrder = (a, b) => (a.num == null) - (b.num == null) || (+a.num || 0)
 const kcSubjects = (r) => [...new Set((r?.subjects || []).map((x) => x[0]).filter(Boolean))];
 
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+// Rozdělí „total“ knih mezi žánry podle toho, jak často je uživatel čte (váha 3 = pořád … 0.5 = výjimečně).
+// Každý žánr dostane aspoň jednu knihu, oblíbenější víc.
+function allocate(weights, total) {
+  const entries = Object.entries(weights || {}).filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]).slice(0, total);
+  const sum = entries.reduce((a, [, w]) => a + w, 0);
+  const out = {};
+  let used = 0;
+  entries.forEach(([g, w]) => { out[g] = Math.max(1, Math.floor((total * w) / sum)); used += out[g]; });
+  for (let i = 0; used < total && entries.length; i = (i + 1) % entries.length) { out[entries[i][0]]++; used++; }
+  for (let i = entries.length - 1; used > total && i >= 0; i--) {
+    while (out[entries[i][0]] > 1 && used > total) { out[entries[i][0]]--; used--; }
+  }
+  return out;
+}

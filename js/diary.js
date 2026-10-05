@@ -286,21 +286,59 @@ async function loadForYou() {
   });
 }
 
+// jak často uživatel žánry čte (z uvítání) – váhy 3 = pořád, 2 = často, 1 = občas, 0.5 = výjimečně
+const FREQ = [[3, "Pořád"], [2, "Často"], [1, "Občas"], [0.5, "Výjimečně"]];
+function genreWeights() {
+  const u = store.get("uvitani", {}) || {};
+  if (u.weights && Object.keys(u.weights).length) return u.weights;
+  return Object.fromEntries((u.genres || []).map((g) => [g, 2])); // starší uvítání bez otázky na četnost
+}
+
+// populární knihy z oblíbených žánrů – oblíbenější žánr dostane víc míst
+async function weightedGenreBooks(weights, total) {
+  const counts = allocate(weights, total);
+  const known = knownKeys();
+  const lanes = await Promise.all(Object.entries(counts).map(async ([g, n]) => {
+    let books = [];
+    try {
+      const gq = olGenreQuery([g], "any");
+      if (gq) {
+        const get = async (lang) => {
+          const p = new URLSearchParams({ q: `${gq} cover_i:[* TO *]`, sort: "readinglog", limit: Math.max(12, n * 4), fields: FIELDS });
+          if (lang) p.set("language", lang);
+          return (await (await fetch(`${API}/search.json?${p}`)).json()).docs.map(toBook);
+        };
+        books = await get($("lang").value);
+        if (books.length < n && $("lang").value) books = [...books, ...(await get(""))];
+      } else if (KC_GENRES[g]) {
+        books = (await kcSearch(KC_GENRES[g], "Subject", Math.max(20, n * 4), "")).filter((b) => b.coverUrl);
+      }
+    } catch {}
+    return { n, books: shuffle(books.slice(0, Math.max(12, n * 3))) };
+  }));
+  const seen = new Set(), perAuthor = {}, out = [];
+  const take = (b) => {
+    const k = normKey(b.title, b.author), a = (b.author || "").split(", ")[0];
+    if (seen.has(k) || known.has(k) || perAuthor[a] >= 2) return false;
+    seen.add(k); perAuthor[a] = (perAuthor[a] || 0) + 1;
+    return true;
+  };
+  const picked = lanes.map(({ n, books }) => books.filter(take).slice(0, n));
+  for (let i = 0; i < total; i++) picked.forEach((lane) => lane[i] && out.push(lane[i])); // žánry se střídají
+  return out.slice(0, total);
+}
+
 // nový uživatel ještě nemá oblíbené knihy – tipy podle žánrů, které si vybral při uvítání
 async function forYouByGenres(box) {
-  const genres = store.get("uvitani", {})?.genres || [];
-  const gq = genres.length ? olGenreQuery(genres, "any") : null;
-  if (!gq) { box.hidden = true; return; }
+  const weights = genreWeights();
+  if (!Object.keys(weights).length) { box.hidden = true; return; }
   box.hidden = false;
   box.innerHTML = `
-    <div class="bday-head"><h2>✨ Pro tebe</h2><span>podle tvých oblíbených žánrů · <button class="linkbtn" id="forYouGenres">změnit žánry</button></span></div>
+    <div class="bday-head"><h2>✨ Pro tebe</h2><span>podle žánrů, které čteš · <button class="linkbtn" id="forYouGenres">změnit žánry</button></span></div>
     <div class="strip" id="forYouStrip">${skeletons(6)}</div>`;
   $("forYouGenres").onclick = openWelcome;
   try {
-    const p = new URLSearchParams({ q: `${gq} cover_i:[* TO *]`, sort: "readinglog", limit: 30, fields: FIELDS });
-    if ($("lang").value) p.set("language", $("lang").value);
-    const known = knownKeys();
-    const books = shuffle((await (await fetch(`${API}/search.json?${p}`)).json()).docs.map(toBook).filter((b) => !known.has(normKey(b.title, b.author)))).slice(0, 14);
+    const books = await weightedGenreBooks(weights, 14);
     if (!$("forYouStrip")) return;
     $("forYouStrip").innerHTML = "";
     books.forEach((b) => $("forYouStrip").appendChild(card(b)));
@@ -309,58 +347,63 @@ async function forYouByGenres(box) {
 }
 
 // ===================== Uvítání nového uživatele =====================
-const welcome = { step: 1, genres: [], picks: new Map(), books: null };
+// 1) které žánry čteš → 2) jak často který → 3) které knihy se ti líbily → 4) hotovo
+const welcome = { step: 1, genres: [], weights: {}, picks: new Map(), books: null };
+const WELCOME_STEPS = 4;
 
 function maybeWelcome() {
   if (store.get("uvitani", null)) return;
   const hasData = Object.values(lists).some((l) => l.length) || Object.keys(myRatings).length;
-  if (hasData) return store.set("uvitani", { done: true, genres: [] }); // stávající uživatel uvítání nepotřebuje
-  if (location.hash) return;                                              // přišel přes odkaz na knihu – nerušíme
+  if (hasData) return store.set("uvitani", { done: true, genres: [], weights: {} }); // stávající uživatel uvítání nepotřebuje
+  if (location.hash) return;                                                         // přišel přes odkaz na knihu – nerušíme
   openWelcome();
 }
 function openWelcome() {
+  const u = store.get("uvitani", {}) || {};
   welcome.step = 1;
-  welcome.genres = [...(store.get("uvitani", {})?.genres || [])];
+  welcome.genres = [...(u.genres || [])];
+  welcome.weights = { ...genreWeights() };
   welcome.picks = new Map();
   welcome.books = null;
   renderWelcome();
   if (!$("welcome").open) $("welcome").showModal();
 }
 function finishWelcome(skip = false) {
-  store.set("uvitani", { done: true, genres: skip ? (store.get("uvitani", {})?.genres || []) : welcome.genres });
+  const prev = store.get("uvitani", {}) || {};
+  const weights = Object.fromEntries(welcome.genres.map((g) => [g, welcome.weights[g] ?? 2]));
+  store.set("uvitani", skip ? { done: true, genres: prev.genres || [], weights: prev.weights || {} } : { done: true, genres: welcome.genres, weights });
   if ($("welcome").open) $("welcome").close();
   if (skip) return;
   welcome.picks.forEach((b) => { if (!inList("fav", b.key)) toggleList("fav", b); });
-  if (welcome.genres.length) { setMode("genre"); state.genres = [...welcome.genres]; state.genreMode = "any"; syncGenres(); search(); }
+  // na úvodní stránce rovnou žánry, které čte „pořád“ nebo „často“ (jinak tři nejčtenější)
+  const main = welcome.genres.filter((g) => weights[g] >= 2);
+  const start = (main.length ? main : [...welcome.genres].sort((a, b) => weights[b] - weights[a]).slice(0, 3));
+  if (start.length) { setMode("genre"); state.genres = start; state.genreMode = "any"; syncGenres(); search(); }
   loadForYou();
   toast(welcome.picks.size ? `Uloženo ${welcome.picks.size} ${plural(welcome.picks.size, "oblíbená kniha", "oblíbené knihy", "oblíbených knih")} – tipy najdeš v sekci Pro tebe` : "Hotovo, můžeš listovat 📖");
 }
 async function welcomeBooks() {
-  const gq = olGenreQuery(welcome.genres, "any") || "";
-  const get = async (lang) => {
-    const p = new URLSearchParams({ q: [gq, "cover_i:[* TO *]"].filter(Boolean).join(" "), sort: "readinglog", limit: 40, fields: FIELDS });
-    if (lang) p.set("language", lang);
-    return (await (await fetch(`${API}/search.json?${p}`)).json()).docs.map(toBook);
-  };
-  let books = await get($("lang").value);
-  if (books.length < 8 && $("lang").value) books = [...books, ...(await get(""))];
-  // bez duplicit a nejvýš 2 knihy od jednoho autora, ať je z čeho vybírat
+  const weights = Object.fromEntries(welcome.genres.map((g) => [g, welcome.weights[g] ?? 2]));
+  if (Object.keys(weights).length) return weightedGenreBooks(weights, 18);
+  // bez žánrů: nejoblíbenější knihy vůbec
+  const p = new URLSearchParams({ q: "cover_i:[* TO *] subject:fiction", sort: "readinglog", limit: 40, fields: FIELDS });
+  if ($("lang").value) p.set("language", $("lang").value);
   const seen = new Set(), perAuthor = {};
-  return books.filter((b) => {
+  return (await (await fetch(`${API}/search.json?${p}`)).json()).docs.map(toBook).filter((b) => {
     const k = normKey(b.title, b.author), a = (b.author || "").split(", ")[0];
     if (seen.has(k) || perAuthor[a] >= 2) return false;
-    seen.add(k);
-    perAuthor[a] = (perAuthor[a] || 0) + 1;
+    seen.add(k); perAuthor[a] = (perAuthor[a] || 0) + 1;
     return true;
   }).slice(0, 18);
 }
 function renderWelcome() {
   const dlg = $("welcome");
-  const dots = `<div class="wdots">${[1, 2, 3].map((n) => `<i class="${n <= welcome.step ? "on" : ""}"></i>`).join("")}</div>`;
+  const dots = `<div class="wdots">${Array.from({ length: WELCOME_STEPS }, (_, i) => `<i class="${i < welcome.step ? "on" : ""}"></i>`).join("")}</div>`;
+  const go = (step) => { welcome.step = step; renderWelcome(); };
   if (welcome.step === 1) {
     dlg.innerHTML = `<div class="wel">${dots}
       <h2>Vítej v Listuj 👋</h2>
-      <p>Pomůžeme ti najít další knihu. Nejdřív nám řekni, <b>co ráda/rád čteš</b> – vyber klidně víc žánrů.</p>
+      <p>Pomůžeme ti najít další knihu. Nejdřív nám řekni, <b>jaké žánry čteš</b> – vyber klidně víc.</p>
       <div class="genres">${GENRES.map(([e, l, id]) => `<button class="chip" data-g="${id}" aria-pressed="${welcome.genres.includes(id)}">${e} ${l}</button>`).join("")}</div>
       <div class="actions"><button class="linkbtn" id="wSkip">Přeskočit</button><button class="btn" id="wNext">Pokračovat →</button></div></div>`;
     dlg.querySelectorAll("[data-g]").forEach((b) => (b.onclick = () => {
@@ -370,19 +413,43 @@ function renderWelcome() {
       welcome.books = null;
     }));
     $("wSkip").onclick = () => finishWelcome(true);
-    $("wNext").onclick = () => { welcome.step = 2; renderWelcome(); };
+    $("wNext").onclick = () => go(welcome.genres.length ? 2 : 3); // bez žánrů není na co se ptát
   } else if (welcome.step === 2) {
+    dlg.innerHTML = `<div class="wel">${dots}
+      <h2>Jak často tyhle žánry čteš?</h2>
+      <p>Podle toho poznáme, co ti nabízet nejvíc.</p>
+      <div class="freq">${welcome.genres.map((g) => `
+        <div class="freq-row">
+          <b>${esc(genreLabel(g))}</b>
+          <div class="seg" role="radiogroup" aria-label="Jak často čteš ${esc(genreLabel(g))}">
+            ${FREQ.map(([w, l]) => `<button role="radio" data-g="${g}" data-w="${w}" aria-pressed="${(welcome.weights[g] ?? 2) === w}" aria-checked="${(welcome.weights[g] ?? 2) === w}">${l}</button>`).join("")}
+          </div>
+        </div>`).join("")}
+      </div>
+      <div class="actions"><button class="btn ghost" id="wBack">← Zpět</button><button class="btn" id="wNext">Pokračovat →</button></div></div>`;
+    dlg.querySelectorAll("[data-w]").forEach((b) => (b.onclick = () => {
+      welcome.weights[b.dataset.g] = +b.dataset.w;
+      welcome.books = null;
+      dlg.querySelectorAll(`[data-g="${b.dataset.g}"]`).forEach((x) => {
+        const on = +x.dataset.w === +b.dataset.w;
+        x.setAttribute("aria-pressed", String(on));
+        x.setAttribute("aria-checked", String(on));
+      });
+    }));
+    $("wBack").onclick = () => go(1);
+    $("wNext").onclick = () => go(3);
+  } else if (welcome.step === 3) {
     dlg.innerHTML = `<div class="wel">${dots}
       <h2>Které z nich se ti líbily?</h2>
       <p>Ťukni na knihy, které máš ráda/rád. Uložíme je do oblíbených a podle nich ti budeme doporučovat další.</p>
       <div class="wgrid" id="wGrid"><p>Načítám knihy…</p></div>
       <div class="actions"><button class="btn ghost" id="wBack">← Zpět</button><button class="btn" id="wNext">Pokračovat →</button></div></div>`;
-    $("wBack").onclick = () => { welcome.step = 1; renderWelcome(); };
-    $("wNext").onclick = () => { welcome.step = 3; renderWelcome(); };
+    $("wBack").onclick = () => go(welcome.genres.length ? 2 : 1);
+    $("wNext").onclick = () => go(4);
     (async () => {
       try { welcome.books = welcome.books || await welcomeBooks(); } catch { welcome.books = []; }
       const grid = $("wGrid");
-      if (!grid || welcome.step !== 2) return;
+      if (!grid || welcome.step !== 3) return;
       if (!welcome.books.length) { grid.innerHTML = `<p>Knihy se nepodařilo načíst – nevadí, pokračuj dál.</p>`; return; }
       grid.innerHTML = welcome.books.map((b, i) => `
         <button class="wpick ${welcome.picks.has(b.key) ? "on" : ""}" data-i="${i}" aria-pressed="${welcome.picks.has(b.key)}">
@@ -399,14 +466,14 @@ function renderWelcome() {
       <h2>Hotovo 🎉</h2>
       <p>Tohle všechno v Listuj najdeš:</p>
       <ul>
-        <li>🔍 <b>Hledání</b> podle žánru, autora, názvu i vlastními slovy</li>
-        <li>✨ <b>Pro tebe</b> – tipy podle knih, které se ti líbí</li>
+        <li>🔍 <b>Hledání</b> podle žánru, autora, názvu i nálady („romantika s upíry“, „něco jako Hobit“)</li>
+        <li>✨ <b>Pro tebe</b> – tipy podle žánrů, které čteš nejčastěji, a knih, které se ti líbí</li>
         <li>📔 <b>Můj deník</b> – co čteš, co máš přečteno, a čtenářská výzva</li>
         <li>📚 <b>Série</b> – který díl následuje a kde pokračovat</li>
       </ul>
       <p>Všechno se ukládá jen ve tvém prohlížeči, bez registrace.</p>
       <div class="actions"><button class="btn ghost" id="wBack">← Zpět</button><button class="btn" id="wDone">Začít listovat 📖</button></div></div>`;
-    $("wBack").onclick = () => { welcome.step = 2; renderWelcome(); };
+    $("wBack").onclick = () => go(3);
     $("wDone").onclick = () => finishWelcome(false);
   }
 }
