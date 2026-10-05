@@ -1,0 +1,5 @@
+# Cloudflare Worker pro hledání podle nálady (viz README.md, část „Skutečná AI“)
+name = "listuj-ai"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]

@@ -3,7 +3,7 @@
   "private": true,
   "description": "Listuj – najdi svou další knihu",
   "scripts": {
-    "test": "node --test tests/pure.test.mjs tests/contrast.test.mjs tests/share.test.mjs",
+    "test": "node --test tests/pure.test.mjs tests/contrast.test.mjs tests/share.test.mjs tests/ai.test.mjs",
     "stamp": "node tools/stamp.mjs",
     "start": "python -m http.server 5174"
   }

@@ -154,3 +154,21 @@ function allocate(weights, total) {
   }
   return out;
 }
+
+// Odpověď serveru s AI převede na stejný tvar, jaký vrací parseMood – zbytek aplikace pak funguje beze změny.
+function aiToMood(ai) {
+  const label = (id) => (GENRES.find((g) => g[2] === id) || [, id])[1];
+  const m = { include: [...(ai.genres || [])], exclude: [...(ai.exclude || [])], topics: [], labels: [], pages: null, period: null, lang: null, rest: "", like: ai.like || null, fresh: !!ai.fresh, ai: true, summary: ai.summary || "" };
+  if (ai.audience === "children" && !m.include.includes("juvenile_fiction")) m.include.push("juvenile_fiction");
+  if (ai.audience === "teen" && !m.include.includes("young_adult_fiction")) m.include.push("young_adult_fiction");
+  if (ai.audience === "adult") ["juvenile_fiction", "young_adult_fiction"].forEach((g) => { if (!m.exclude.includes(g) && !m.include.includes(g)) m.exclude.push(g); });
+  m.include.forEach((g) => m.labels.push({ label: label(g), neg: false }));
+  m.exclude.forEach((g) => m.labels.push({ label: label(g), neg: true }));
+  m.topics = (ai.topics || []).map((x) => ({ ol: x.en, kc: x.cs, label: x.cs }));
+  m.topics.forEach((x) => m.labels.push({ label: "📌 " + x.label, neg: false }));
+  if (m.like) m.labels.push({ label: `podobné jako „${m.like}“`, neg: false });
+  m.pages = { short: [0, 250], not_long: [0, 350], long: [500, "*"] }[ai.length] || null;
+  if (m.fresh) { m.period = "new"; m.labels.push({ label: "úplné novinky" }); }
+  if (ai.lang && ai.lang !== "any") m.lang = ai.lang;
+  return m;
+}

@@ -3,14 +3,15 @@ function render() {
   const grid = $("grid");
   grid.innerHTML = "";
   let books;
-  const diary = state.view === "diary", chartsView = state.view === "charts";
+  const diary = state.view === "diary", chartsView = state.view === "charts", listsView = state.view === "mylists";
+  $("mylists").hidden = !listsView;
   $("diary").hidden = !diary;
   $("charts").hidden = !chartsView;
-  grid.hidden = diary || chartsView;
-  if (diary || chartsView) {
+  grid.hidden = diary || chartsView || listsView;
+  if (diary || chartsView || listsView) {
     $("more").hidden = $("gridHint").hidden = true;
     $("status").textContent = "";
-    return diary ? renderDiary() : renderCharts();
+    return diary ? renderDiary() : chartsView ? renderCharts() : renderMyLists();
   }
 
   if (state.view === "results") {

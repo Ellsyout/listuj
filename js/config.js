@@ -62,7 +62,7 @@ const LISTS = {
 // kniha může být jen v jednom z těchto stavů (oblíbené jsou zvlášť)
 const STATUS = ["want", "reading", "read"];
 // všechno, co si aplikace ukládá do prohlížeče (pro zálohu)
-const BACKUP_KEYS = ["oblibene", "chci-si-precist", "ctu", "precteno", "moje-hodnoceni", "prectene-dily", "vyzva", "sledovani", "tema", "uvitani", "odznaky"];
+const BACKUP_KEYS = ["oblibene", "chci-si-precist", "ctu", "precteno", "moje-hodnoceni", "prectene-dily", "vyzva", "sledovani", "tema", "uvitani", "odznaky", "vlastni-seznamy"];
 
 const API = "https://openlibrary.org";
 
@@ -73,7 +73,8 @@ const GB_API = "https://www.googleapis.com/books/v1/volumes";
 
 // ---- Zpětná vazba a statistika – prázdná hodnota = vypnuto ----
 const FEEDBACK_ENDPOINT = "https://formspree.io/f/mdekjqkw"; // formulář „Napiš nám“ (Formspree)
-const GOATCOUNTER = "";       // název účtu GoatCounter, např. "listuj" (z adresy listuj.goatcounter.com)
+const GOATCOUNTER = "";
+const AI_ENDPOINT = "";       // adresa serveru s AI pro hledání podle nálady, např. "https://listuj-ai.NECO.workers.dev/nalada"       // název účtu GoatCounter, např. "listuj" (z adresy listuj.goatcounter.com)
 
 // délka knihy podle počtu stran
 const LENGTHS = { short: [0, 250], mid: [251, 500], long: [501, "*"] };

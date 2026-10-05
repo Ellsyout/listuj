@@ -12,7 +12,10 @@ const read = (file) => readFileSync(join(root, file), "utf8");
 
 // social.js potřebuje jen pár věcí z prohlížeče – Node je má také
 const browserBits = { btoa, atob, TextEncoder, TextDecoder, Response, Blob, CompressionStream, DecompressionStream };
-const ctx = vm.createContext({ ...browserBits, window: { ...browserBits } });
+// social.js při načtení sahá na úložiště a jeden prvek stránky – v testu stačí jednoduché náhražky
+const fakePage = { getElementById: () => ({ addEventListener() {} }) };
+const fakeStore = { get: (k, d) => d, set() {} };
+const ctx = vm.createContext({ ...browserBits, window: { ...browserBits }, document: fakePage, store: fakeStore });
 vm.runInContext(read("js/config.js") + "\n" + read("js/pure.js") + "\n" + read("js/social.js"), ctx);
 const app = vm.runInContext("({ encodeList, decodeList, packBook })", ctx);
 const plainObj = (x) => JSON.parse(JSON.stringify(x));

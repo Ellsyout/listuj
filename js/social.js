@@ -158,6 +158,7 @@ async function openSharedList(code) {
       <p class="by" style="color:var(--muted)">Sdílený seznam · ${data.books.length} ${plural(data.books.length, "kniha", "knihy", "knih")}</p>
       <div class="actions" style="margin:14px 0 20px">
         <button class="btn" id="lSaveAll">🔖 Uložit všechny do „Chci si přečíst“</button>
+        <button class="btn ghost" id="lAsList">🗂️ Uložit jako můj seznam</button>
         <button class="btn ghost" id="lShare">📤 Poslat dál</button>
       </div>
       <div class="grid" id="lGrid"></div>
@@ -165,6 +166,11 @@ async function openSharedList(code) {
   data.books.forEach((b) => $("lGrid").appendChild(card(b)));
   $("lBack").onclick = listBack;
   $("lShare").onclick = () => shareList(data.name, data.books);
+  $("lAsList").onclick = () => {
+    createList(data.name, data.books);
+    toast(`Seznam „${data.name}“ najdeš v záložce Moje seznamy`);
+    $("lAsList").disabled = true;
+  };
   $("lSaveAll").onclick = () => {
     let n = 0;
     data.books.forEach((b) => { if (!STATUS.some((x) => inList(x, b.key))) { toggleList("want", b); n++; } });
@@ -253,4 +259,128 @@ function badgesHtml() {
           </div>`;
       }).join("")}</div>
     </div>`;
+}
+
+// ===================== Vlastní seznamy =====================
+// „Dárky pro mámu“, „Na dovolenou“… – libovolně pojmenované seznamy knih, jdou sdílet a jsou v záloze.
+let myLists = store.get("vlastni-seznamy", []);   // [{ id, name, created, books: [kniha + at] }]
+const saveMyLists = () => store.set("vlastni-seznamy", myLists);
+const newListId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const inMyList = (l, key) => l.books.some((b) => b.key === key);
+
+function createList(name, books = []) {
+  const l = { id: newListId(), name: name.trim().slice(0, 60) || "Nový seznam", created: Date.now(), books: books.map((b) => ({ ...slim(b), at: Date.now() })) };
+  myLists = [l, ...myLists];
+  saveMyLists();
+  renderTabs();
+  return l;
+}
+function toggleInList(l, book) {
+  l.books = inMyList(l, book.key) ? l.books.filter((b) => b.key !== book.key) : [{ ...slim(book), at: Date.now() }, ...l.books];
+  saveMyLists();
+  renderTabs();
+}
+
+// okénko „Do seznamu“ na stránce knihy
+function openListPick(book) {
+  const dlg = $("listPick");
+  const draw = () => {
+    dlg.innerHTML = `
+      <div class="lp">
+        <h2>🗂️ Přidat do seznamu</h2>
+        <p class="status" style="margin:0">${esc(book.title)}</p>
+        ${myLists.length ? `<div class="lp-list">${myLists.map((l) => `
+          <label class="lp-row"><input type="checkbox" data-id="${l.id}" ${inMyList(l, book.key) ? "checked" : ""}> ${esc(l.name)} <small>${l.books.length}</small></label>`).join("")}</div>`
+          : `<p class="status" style="margin:0">Zatím nemáš žádný vlastní seznam. Založ si první:</p>`}
+        <form class="lp-new" id="lpNewForm">
+          <input id="lpNew" type="text" maxlength="60" placeholder="Nový seznam, např. Na dovolenou" aria-label="Název nového seznamu">
+          <button class="btn" type="submit" style="min-height:44px;padding:8px 14px">Přidat</button>
+        </form>
+        <div class="actions" style="margin:0;justify-content:flex-end"><button class="btn ghost" id="lpDone">Hotovo</button></div>
+      </div>`;
+    dlg.querySelectorAll("[data-id]").forEach((c) => (c.onchange = () => { toggleInList(myLists.find((l) => l.id === c.dataset.id), book); draw(); }));
+    $("lpNewForm").onsubmit = (e) => {
+      e.preventDefault();
+      const name = $("lpNew").value.trim();
+      if (!name) return $("lpNew").focus();
+      createList(name, [book]);
+      toast(`Seznam „${name}“ založen`);
+      draw();
+    };
+    $("lpDone").onclick = () => dlg.close();
+  };
+  draw();
+  dlg.showModal();
+  $("lpNew").focus();
+}
+$("listPick").addEventListener("click", (e) => { if (e.target === $("listPick")) $("listPick").close(); });
+
+// záložka „Moje seznamy“: přehled, nebo obsah jednoho seznamu
+function renderMyLists() {
+  const box = $("mylists");
+  const open = myLists.find((l) => l.id === state.openList);
+  if (!open) {
+    state.openList = null;
+    box.innerHTML = `
+      <div class="section" style="margin-top:0">
+        <h2>🗂️ Moje seznamy <small style="color:var(--muted);font-weight:500">${myLists.length || ""}</small></h2>
+        <p class="status" style="margin-bottom:14px">Seznamy si pojmenuj podle sebe – „Dárky pro mámu“, „Na dovolenou“, „Top 10 fantasy“. Knihu přidáš tlačítkem „🗂️ Do seznamu“ na její stránce.</p>
+        <div class="ml-grid">
+          <button class="ml-card ml-new" id="mlNew">＋ Nový seznam</button>
+          ${myLists.map((l) => `
+            <button class="ml-card" data-open="${l.id}">
+              <div class="ml-covers">${[0, 1, 2, 3].map((i) => l.books[i] ? `<div class="cover">${coverHtml(l.books[i], "S")}</div>` : `<div class="cover"></div>`).join("")}</div>
+              <b>${esc(l.name)}</b>
+              <small>${l.books.length} ${plural(l.books.length, "kniha", "knihy", "knih")}</small>
+            </button>`).join("")}
+        </div>
+      </div>`;
+    $("mlNew").onclick = () => {
+      const name = prompt("Jak se má nový seznam jmenovat?", "");
+      if (!name || !name.trim()) return;
+      state.openList = createList(name).id;
+      renderMyLists();
+    };
+    box.querySelectorAll("[data-open]").forEach((b) => (b.onclick = () => { state.openList = b.dataset.open; renderMyLists(); }));
+    return;
+  }
+  box.innerHTML = `
+    <div class="section" style="margin-top:0">
+      <h2><span>🗂️ ${esc(open.name)} <small style="color:var(--muted);font-weight:500">${open.books.length} ${plural(open.books.length, "kniha", "knihy", "knih")}</small></span>
+        <button class="linkbtn" id="mlBack">← Všechny seznamy</button></h2>
+      <div class="actions" style="margin:0 0 16px">
+        <button class="btn ghost" id="mlShare">📤 Sdílet</button>
+        <button class="btn ghost" id="mlRename">✏️ Přejmenovat</button>
+        <button class="btn ghost" id="mlDelete">🗑️ Smazat seznam</button>
+      </div>
+      ${open.books.length ? `<div class="grid" id="mlGrid"></div>` : `<p class="status">Seznam je zatím prázdný. Knihu přidáš tlačítkem „🗂️ Do seznamu“ na její stránce.</p>`}
+    </div>`;
+  open.books.forEach((b) => {
+    const el = card(b);
+    const rm = document.createElement("button");
+    rm.className = "btn ghost mini-btn rm";
+    rm.textContent = "✕ Odebrat";
+    rm.setAttribute("aria-label", `Odebrat ${b.title} ze seznamu`);
+    rm.onclick = (e) => { e.stopPropagation(); toggleInList(open, b); renderMyLists(); };
+    el.appendChild(rm);
+    $("mlGrid").appendChild(el);
+  });
+  $("mlBack").onclick = () => { state.openList = null; renderMyLists(); };
+  $("mlShare").onclick = () => shareList(open.name, open.books);
+  $("mlRename").onclick = () => {
+    const name = prompt("Nový název seznamu:", open.name);
+    if (!name || !name.trim()) return;
+    open.name = name.trim().slice(0, 60);
+    saveMyLists();
+    renderMyLists();
+  };
+  $("mlDelete").onclick = () => {
+    if (!confirm(`Opravdu smazat seznam „${open.name}“? Knihy zůstanou v ostatních seznamech.`)) return;
+    myLists = myLists.filter((l) => l !== open);
+    saveMyLists();
+    state.openList = null;
+    renderTabs();
+    renderMyLists();
+    toast("Seznam smazán");
+  };
 }

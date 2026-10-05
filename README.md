@@ -79,3 +79,24 @@ V `js/config.js` jsou dvě nastavení, prázdná hodnota znamená vypnuto:
 
 - `FEEDBACK_ENDPOINT`: adresa formuláře [Formspree](https://formspree.io) pro „Napiš nám“
 - `GOATCOUNTER`: název účtu [GoatCounter](https://www.goatcounter.com) pro anonymní počítání návštěv
+
+## Skutečná AI pro hledání podle nálady (volitelné)
+
+Bez AI aplikace rozumí náladě přes vlastní slovník (`parseMood`). S AI větu čtenáře rozebere Claude
+(Anthropic) a vrátí žánry, motivy, „něco jako…“, délku a novost – aplikace pak hledá úplně stejně jako dřív.
+Klíč k AI nesmí být v aplikaci (každý by ho viděl), proto je mezi nimi malý server ve složce `ai-worker/`
+(Cloudflare Worker: povolí jen adresu aplikace, max. 10 dotazů za minutu z jedné IP, věta max. 300 znaků).
+
+1. Na https://console.anthropic.com si založ účet, dobij kredit, nastav měsíční limit útraty a vytvoř API klíč.
+2. Na https://dash.cloudflare.com si založ účet (zdarma).
+3. V terminálu ve složce `ai-worker`:
+   ```
+   npm install
+   npx wrangler login
+   npx wrangler secret put ANTHROPIC_API_KEY    # sem vložíš klíč – zůstane jen na Cloudflare
+   npx wrangler deploy
+   ```
+4. Adresu, kterou `deploy` vypíše (`https://listuj-ai.….workers.dev`), doplň s `/nalada` na konec do
+   `AI_ENDPOINT` v `js/config.js` a vydej novou verzi.
+
+Když AI neodpoví do 12 s nebo selže, aplikace tiše použije slovník. Logiku serveru testuje `tests/ai.test.mjs`.

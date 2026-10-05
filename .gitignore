@@ -1,2 +1,7 @@
 # nastavení pro Claude Code (jen pro tento počítač)
 .claude/
+# server s AI: knihovny, sestavení a lokální tajné proměnné
+ai-worker/node_modules/
+ai-worker/dist/
+ai-worker/.wrangler/
+ai-worker/.dev.vars

@@ -1,0 +1,16 @@
+{
+  "name": "listuj-ai",
+  "private": true,
+  "type": "module",
+  "description": "Server pro hledání podle nálady v aplikaci Listuj (Cloudflare Worker + Claude)",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.147.0"
+  }
+}

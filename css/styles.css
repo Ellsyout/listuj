@@ -509,3 +509,26 @@ textarea { min-height: 90px; resize: vertical; }
 .bprog i { display: block; height: 100%; background: var(--grad); }
 .list-share { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 560px) { .badges { grid-template-columns: 1fr 1fr; gap: 8px; } .badge { padding: 10px 8px; } .badge .bicon { font-size: 1.6rem; } }
+
+/* ===== Vlastní seznamy ===== */
+#listPick { border: none; padding: 0; border-radius: 22px; background: var(--paper); color: var(--ink); width: min(440px, calc(100% - 32px)); box-shadow: 0 30px 80px -20px rgba(0,0,0,.5); }
+#listPick::backdrop { background: rgba(10, 8, 25, .6); }
+.lp { padding: 22px; display: grid; gap: 12px; }
+.lp h2 { margin: 0; font-size: 1.2rem; }
+.lp-list { display: grid; gap: 6px; max-height: 45vh; overflow-y: auto; }
+.lp-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); cursor: pointer; font-weight: 600; }
+.lp-row input { width: 20px; height: 20px; accent-color: var(--a1); margin: 0; }
+.lp-row small { margin-left: auto; color: var(--muted); font-weight: 500; }
+.lp-new { display: flex; gap: 8px; }
+.lp-new input { flex: 1; }
+.ml-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.ml-card { background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 14px; cursor: pointer; text-align: left; font: inherit; color: inherit; display: grid; gap: 10px; }
+.ml-card:hover { border-color: var(--a1); }
+.ml-covers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ml-covers .cover { border-radius: 6px; box-shadow: none; }
+.ml-covers .ph { font-size: .5rem; padding: 4px; }
+.ml-card b { font-size: 1.02rem; }
+.ml-card small { color: var(--muted); }
+.ml-new { border-style: dashed; place-items: center; min-height: 140px; text-align: center; color: var(--muted); font-weight: 600; }
+.card .rm { margin-top: 6px; }
+@media (max-width: 560px) { .ml-grid { grid-template-columns: 1fr 1fr; gap: 10px; } .ml-card { padding: 10px; } }

@@ -63,6 +63,7 @@ async function openBook(id, src = "ol") {
               ${readBtn || gbRead}
               ${Object.entries(LISTS).map(([lid, l]) => `<button class="btn ghost" data-list="${lid}">${l.icon} ${l.label}</button>`).join("")}
               <button class="btn ghost" id="bGoReviews">⭐ Recenze</button>
+              <button class="btn ghost" id="bToList">🗂️ Do seznamu</button>
               <button class="btn ghost" id="bShare">📤 Sdílet</button>
             </div>
             <p class="date-row" id="bReadRow" hidden>✅ Dočteno <input type="date" id="bReadDate" aria-label="Datum dočtení"></p>
@@ -160,6 +161,7 @@ async function openBook(id, src = "ol") {
     store.set(LISTS.read.store, lists.read);
   };
   $("bShare").onclick = () => shareBook(book);
+  $("bToList").onclick = () => openListPick(book);
   $("bGoReviews").onclick = () => $("bReviews").scrollIntoView({ behavior: "smooth" });
   setupMyRating(book);
 

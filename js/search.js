@@ -74,9 +74,28 @@ MOOD_EXAMPLES.forEach((text) => {
 
 
 
+// zeptá se serveru s AI; při chybě nebo pomalé odpovědi vrátí null (pak se použije slovník)
+async function aiMood(text) {
+  $("moodParse").hidden = false;
+  $("moodParse").textContent = "🤖 Přemýšlím, co by se ti mohlo líbit…";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: ctrl.signal });
+    if (!r.ok) return null;
+    const ai = await r.json();
+    const m = aiToMood(ai);
+    return m.include.length || m.topics.length || m.like ? m : null; // AI nic nepoznala → slovník
+  } catch { return null; } finally { clearTimeout(timer); }
+}
+
 function showMoodParse(m) {
   const el = $("moodParse");
   el.hidden = false;
+  if (m.ai) {
+    el.innerHTML = `🤖 ${esc(m.summary || "Rozumím:")} ${m.labels.map((l) => `<span class="tag ${l.neg ? "no" : l.neg === false ? "yes" : ""}">${l.neg ? "✗ bez: " : l.neg === false ? "✓ " : ""}${esc(l.label)}</span>`).join("")}`;
+    return;
+  }
   el.innerHTML = m.labels.length
     ? `Rozumím: ${m.labels.map((l) => `<span class="tag ${l.neg ? "no" : l.neg === false ? "yes" : ""}">${l.neg ? "✗ bez: " : l.neg === false ? "✓ " : ""}${esc(l.label)}</span>`).join("")}`
     : `Nepoznala jsem žádný žánr ani motiv, hledám podle slov „${esc(m.rest || $("q").value)}“. Zkus třeba „romantika s upíry“ nebo „něco jako Hobit“.`;
@@ -103,6 +122,7 @@ function renderTabs() {
   const tabs = [
     ["results", "Výsledky"],
     ["charts", "📈 Žebříčky"],
+    ["mylists", `🗂️ Moje seznamy (${myLists.length})`],
     ["diary", `📔 Můj deník (${lists.reading.length + lists.read.length})`],
     ["fav", `♥ Oblíbené (${lists.fav.length})`],
     ["want", `🔖 Chci si přečíst (${lists.want.length})`],
@@ -166,7 +186,7 @@ async function search({ append = false, random = false } = {}) {
       $("grid").innerHTML = `<div class="empty"><b>💬</b>Popiš vlastními slovy, na co máš chuť – třeba „něco napínavého, ale ne horor“.</div>`;
       return;
     }
-    state.mood = parseMood(text);
+    state.mood = (AI_ENDPOINT && (await aiMood(text))) || parseMood(text);
     // u nálady rozhoduje obsah: bez „novinky“ ve větě hledáme ve všech letech (novinky jsou zvlášť v „Právě vyšlo“)
     $("period").value = state.mood.period || "";
     if (state.mood.lang) $("lang").value = state.mood.lang;

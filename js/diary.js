@@ -140,6 +140,17 @@ function mergeBackup(data) {
     for (const [key, r] of Object.entries(data["moje-hodnoceni"])) if (!cur[key] || (r.date || 0) > (cur[key].date || 0)) cur[key] = r;
     store.set("moje-hodnoceni", cur);
   }
+  if (Array.isArray(data["vlastni-seznamy"])) {
+    // seznamy podle id; u stejného seznamu sloučíme knihy
+    const cur = store.get("vlastni-seznamy", []);
+    for (const l of data["vlastni-seznamy"]) {
+      if (!l?.id || !Array.isArray(l.books)) continue;
+      const mine = cur.find((x) => x.id === l.id);
+      if (!mine) cur.push(l);
+      else { const have = new Set(mine.books.map((b) => b.key)); mine.books.push(...l.books.filter((b) => b?.key && !have.has(b.key))); }
+    }
+    store.set("vlastni-seznamy", cur);
+  }
   if (data.odznaky && typeof data.odznaky === "object") store.set("odznaky", { ...data.odznaky, ...store.get("odznaky", {}) });
   if (Array.isArray(data["prectene-dily"])) store.set("prectene-dily", [...new Set([...store.get("prectene-dily", []), ...data["prectene-dily"]])]);
   if (data.vyzva && typeof data.vyzva === "object") store.set("vyzva", { ...data.vyzva, ...store.get("vyzva", {}) });
@@ -517,6 +528,7 @@ function openAbout(toForm = false) {
           <li><b>Tvoje data zůstávají u tebe.</b> Oblíbené knihy, deník, hodnocení, sledování a historie se ukládají jen do úložiště tohoto prohlížeče. Nikam je neposíláme a smazat je můžeš vymazáním dat prohlížeče.</li>
           <li><b>Co odchází ven:</b> když něco hledáš, pošle se hledaný text zdrojům uvedeným výše, aby vrátily knihy. Cizojazyčné popisy knih se posílají k překladu Překladači Google. Písmo se načítá ze služby Google Fonts.</li>
           ${GOATCOUNTER ? `<li><b>Počítání návštěv:</b> používáme <a href="https://www.goatcounter.com" target="_blank" rel="noopener">GoatCounter</a>, který bez cookies a bez ukládání osobních údajů počítá, kolikrát byla aplikace otevřena.</li>` : `<li><b>Návštěvy nepočítáme</b> a nesledujeme, co v aplikaci děláš.</li>`}
+          ${AI_ENDPOINT ? `<li><b>Hledání podle nálady:</b> větu, kterou napíšeš, pošleme přes náš server umělé inteligenci Claude (Anthropic), aby z ní poznala žánry a motivy. Nic dalšího o tobě se neposílá.</li>` : ""}
           ${FEEDBACK_ENDPOINT ? `<li><b>Formulář „Napiš nám“:</b> zprávu (a e-mail, pokud ho vyplníš) nám doručí služba Formspree.</li>` : ""}
         </ul>
       </div>

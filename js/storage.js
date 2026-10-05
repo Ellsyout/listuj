@@ -23,7 +23,8 @@ function toggleList(id, book) {
 }
 // knihy, které už uživatel zná (v seznamech nebo ohodnocené) – ty nedoporučujeme
 function knownKeys() {
-  const all = [...Object.values(lists).flat(), ...Object.values(myRatings).map((r) => r.book)];
+  const all = [...Object.values(lists).flat(), ...Object.values(myRatings).map((r) => r.book),
+    ...(typeof myLists !== "undefined" ? myLists.flatMap((l) => l.books) : [])];
   return new Set(all.map((b) => normKey(b.title, b.author)));
 }
 function toast(text) {
